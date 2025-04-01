@@ -8,62 +8,41 @@ let selectedPieceMesh = null; // Stores the 3D mesh (Group) of the currently sel
 let validMoveCoords = [];   // Stores the coordinates [{row, col}, ...] of valid moves for the selected piece
 let isDragging = false;       // Basic flag for drag-and-drop state (optional)
 
-// --- NEW: AI Configuration ---
+// --- AI Configuration ---
 const CPU_PLAYER_COLOR = ChessLogic.COLORS.BLACK; // Set the CPU to play as Black
 let isPlayerTurn = true; // Flag to disable player input during CPU turn
+let aiSearchDepth = 2; // <-- NEW: How many moves ahead the AI looks (e.g., 1=Easy, 2=Medium, 3=Harder but slower)
 
 // --- Initialization ---
 
 /**
  * Initializes the entire application: UI, 3D scene, game logic, and event listeners.
- * This function is the main entry point, typically called after the DOM is loaded.
  */
 function initApp() {
     console.log("Initializing Chess Application...");
-
-    // 1. Initialize the UI Manager to get DOM element references
     UIManager.initUIManager();
-
-    // 2. Initialize the Three.js Scene
     const sceneContainer = document.getElementById('scene-container');
     if (!sceneContainer) {
         console.error("Fatal Error: #scene-container element not found in HTML!");
         UIManager.updateGameStatusDisplay({ error: "Initialization failed: Missing scene container." });
         return;
     }
-    ThreeSetup.init(sceneContainer); // Pass the container element to threeSetup
-
-    // 3. Initialize the Chess Logic module to set up the starting board state
+    ThreeSetup.init(sceneContainer);
     ChessLogic.initializeGame();
-
-    // 4. Populate the 3D board with pieces based on the initial game logic state
     setupInitialBoard();
-
-    // 5. Update the HTML UI elements (turn indicator, etc.) based on the initial state
     updateUI();
-
-    // 6. Setup Event Listeners for user interaction
     sceneContainer.addEventListener('click', onCanvasClick);
-    // Optional: Add listeners for drag-and-drop interaction
-    // sceneContainer.addEventListener('mousedown', onCanvasMouseDown);
-    // sceneContainer.addEventListener('mousemove', onCanvasMouseMove);
-    // sceneContainer.addEventListener('mouseup', onCanvasMouseUp);
-
-    // Setup UI button listeners (e.g., New Game button)
     UIManager.setupEventListeners(startNewGame);
-
-    isPlayerTurn = (ChessLogic.getCurrentPlayer() !== CPU_PLAYER_COLOR); // Set initial turn state
-
+    isPlayerTurn = (ChessLogic.getCurrentPlayer() !== CPU_PLAYER_COLOR);
     console.log("Chess Application Initialized Successfully.");
 }
 
 /**
  * Clears the 3D board and sets up pieces based on the current ChessLogic board state.
- * Used for initial setup and starting a new game.
  */
 function setupInitialBoard() {
-    ThreeSetup.clearPieces(); // Remove any existing 3D pieces first
-    const boardState = ChessLogic.getBoardState(); // Get the 8x8 array from logic module
+    ThreeSetup.clearPieces();
+    const boardState = ChessLogic.getBoardState();
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
             const piece = boardState[r][c];
@@ -77,7 +56,6 @@ function setupInitialBoard() {
 
 /**
  * Resets the game state and UI to start a new game.
- * Called when the "New Game" button is clicked.
  */
 function startNewGame() {
     console.log("Starting New Game...");
@@ -115,24 +93,20 @@ function updateUI() {
     }
 }
 
+
 // --- Event Handlers for User Interaction ---
 
 /**
  * Handles click events on the Three.js canvas.
- * Manages piece selection and triggering move attempts.
- * @param {MouseEvent} event - The mouse click event.
  */
 function onCanvasClick(event) {
-    // --- MODIFIED: Check if it's the player's turn ---
-    if (!isPlayerTurn) {
+    if (!isPlayerTurn) { // Check if it's the player's turn
         console.log("Ignoring click: Not player's turn.");
         return;
     }
-
-    if (isDragging) return; // Prevent interference if drag-and-drop is active
+    if (isDragging) return;
 
     const intersects = ThreeSetup.getIntersects(event);
-
     if (intersects.length > 0) {
         const clickedObject = intersects[0].object;
         const userData = clickedObject.userData;
@@ -164,12 +138,9 @@ function onCanvasClick(event) {
 
 /**
  * Selects a piece: stores its mesh, gets valid moves, and shows highlights.
- * @param {THREE.Group} pieceMeshGroup - The 3D mesh group of the piece to select.
  */
 function selectPiece(pieceMeshGroup) {
-    if (selectedPieceMesh === pieceMeshGroup) {
-        return;
-    }
+    if (selectedPieceMesh === pieceMeshGroup) return;
     deselectPiece();
     selectedPieceMesh = pieceMeshGroup;
     const { row, col } = selectedPieceMesh.userData;
@@ -189,22 +160,16 @@ function deselectPiece() {
 
 /**
  * Attempts to make a move from the selected piece to the target square coordinates.
- * Validates the move, updates logic, updates 3D scene, updates UI, and triggers AI if needed.
- * @param {number} targetRow - The destination row index.
- * @param {number} targetCol - The destination column index.
  */
 function attemptMove(targetRow, targetCol) {
-    if (!selectedPieceMesh) {
-        console.warn("Attempted move without a selected piece.");
-        return;
-    }
+    if (!selectedPieceMesh) return;
 
     const startRow = selectedPieceMesh.userData.row;
     const startCol = selectedPieceMesh.userData.col;
 
     const isValidTarget = validMoveCoords.some(move => move.row === targetRow && move.col === targetCol);
     if (!isValidTarget) {
-        console.log("Clicked square is not a valid move for the selected piece.");
+        console.log("Clicked square is not a valid move.");
         return;
     }
 
@@ -214,12 +179,11 @@ function attemptMove(targetRow, targetCol) {
     const pieceLogic = ChessLogic.getPieceAt(startRow, startCol);
     const promotionRank = ChessLogic.getCurrentPlayer() === ChessLogic.COLORS.WHITE ? 0 : 7;
     if (pieceLogic && pieceLogic.type === ChessLogic.PIECE_TYPES.PAWN && targetRow === promotionRank) {
-        promotionPieceType = ChessLogic.PIECE_TYPES.QUEEN; // Auto-promote to Queen for now
+        promotionPieceType = ChessLogic.PIECE_TYPES.QUEEN; // Auto-promote to Queen
         console.log(`Auto-promoting pawn to ${promotionPieceType}`);
     }
 
-    // Store mesh reference before deselecting
-    const humanPieceMesh = selectedPieceMesh;
+    const humanPieceMesh = selectedPieceMesh; // Store mesh ref before deselecting
 
     // --- Call ChessLogic to Make the Move ---
     const moveResult = ChessLogic.makeMove(startRow, startCol, targetRow, targetCol, promotionPieceType);
@@ -227,44 +191,41 @@ function attemptMove(targetRow, targetCol) {
     // --- Process the Result ---
     if (moveResult.success) {
         console.log("Move successful in logic:", moveResult.moveNotation);
-
-        // --- Update 3D Scene using the new function ---
-        handleMoveResultGraphics(moveResult, humanPieceMesh); // Pass the mesh that moved
-
-        // --- Update HTML UI ---
-        updateUI();
-
-        // --- Clean up Human Move ---
-        deselectPiece(); // Deselect the piece after a successful move
+        handleMoveResultGraphics(moveResult, humanPieceMesh); // Update 3D graphics
+        updateUI(); // Update HTML UI
+        deselectPiece(); // Deselect piece
 
         // --- Check if it's CPU's turn ---
         const currentTurnPlayer = ChessLogic.getCurrentPlayer();
         const currentStatus = ChessLogic.getGameStatus();
 
         if (!currentStatus.isCheckmate && !currentStatus.isStalemate && currentTurnPlayer === CPU_PLAYER_COLOR) {
-            isPlayerTurn = false; // Disable player input during CPU turn
+            isPlayerTurn = false; // Disable player input
             console.log("CPU's turn (Black)...");
             UIManager.updateGameStatusDisplay({ info: "CPU is thinking..."}); // Optional message
 
-            // Use setTimeout to allow UI to update and give a brief pause
-            setTimeout(triggerAIMove, 500); // Delay AI move by 500ms (0.5 seconds)
+            // Use setTimeout to allow UI to update and give a brief pause before AI thinks
+            setTimeout(triggerAIMove, 500); // Delay AI move by 500ms
         } else {
-             isPlayerTurn = true; // Ensure player turn is enabled if game not over or it's human's turn again
+             isPlayerTurn = true; // Still human turn or game over
         }
 
     } else {
         console.log("Move invalid or failed according to ChessLogic.");
-        isPlayerTurn = true; // Ensure player can move if their attempt failed
+        isPlayerTurn = true; // Ensure player can move if attempt failed
     }
-} // End of attemptMove function
-
+}
 
 /**
- * NEW: Handles updating the 3D graphics after a move is successful in the logic.
- * @param {object} moveResult - The result object from ChessLogic.makeMove.
- * @param {THREE.Group} movingPieceMesh - The mesh group of the piece that moved.
+ * Handles updating the 3D graphics after a move is successful in the logic.
  */
 function handleMoveResultGraphics(moveResult, movingPieceMesh) {
+    // Check if moveResult and moveResult.move exist before accessing properties
+    if (!moveResult || !moveResult.move) {
+        console.error("handleMoveResultGraphics called with invalid moveResult:", moveResult);
+        return;
+    }
+
     // 1. Remove captured piece mesh
     if (moveResult.capturedPiece) {
         let capturedRow = moveResult.move.endRow;
@@ -301,22 +262,15 @@ function handleMoveResultGraphics(moveResult, movingPieceMesh) {
      // 4. Handle promotion piece change in 3D
      if (moveResult.specialMoves.promotion) {
          console.log(`Updating 3D model for promotion at [${moveResult.move.endRow}, ${moveResult.move.endCol}] to ${moveResult.specialMoves.promotion}`);
-         // Remove the original pawn mesh (which might be movingPieceMesh or the mesh at the destination)
          const pawnMesh = movingPieceMesh && movingPieceMesh.userData.type === ChessLogic.PIECE_TYPES.PAWN ? movingPieceMesh : ThreeSetup.getPieceMeshAt(moveResult.move.endRow, moveResult.move.endCol);
          if (pawnMesh) {
             ThreeSetup.removePieceMesh(pawnMesh);
          } else {
              console.warn("Could not find promoted pawn mesh at destination square for removal.");
          }
-         // Add the new piece model using the updated logic state
          const newPieceLogic = ChessLogic.getPieceAt(moveResult.move.endRow, moveResult.move.endCol);
          if (newPieceLogic) {
-             ThreeSetup.addPieceToScene(
-                 newPieceLogic.type,
-                 newPieceLogic.color,
-                 moveResult.move.endRow,
-                 moveResult.move.endCol
-             );
+             ThreeSetup.addPieceToScene(newPieceLogic.type, newPieceLogic.color, moveResult.move.endRow, moveResult.move.endCol);
          } else {
              console.error("Logic error: Piece not found at promotion square after promotion!");
          }
@@ -324,20 +278,21 @@ function handleMoveResultGraphics(moveResult, movingPieceMesh) {
 }
 
 /**
- * NEW: Triggers the AI's move calculation and execution.
+ * Triggers the AI's move calculation and execution.
  */
 function triggerAIMove() {
-    console.log("Triggering AI move calculation...");
-    const aiMove = ChessLogic.getRandomMoveForComputer(); // Get random move from logic
+    console.log(`Triggering AI move calculation with depth ${aiSearchDepth}...`);
+
+    // --- MODIFIED: Call getBestMoveMinimax instead of getRandomMoveForComputer ---
+    const aiMove = ChessLogic.getBestMoveMinimax(aiSearchDepth);
 
     if (aiMove) {
         console.log("AI chose move:", aiMove);
-        // Find the 3D mesh corresponding to the piece the AI wants to move
         const movingAiMesh = ThreeSetup.getPieceMeshAt(aiMove.startRow, aiMove.startCol);
         if (!movingAiMesh) {
              console.error("AI move error: Could not find the 3D mesh for the piece at", aiMove.startRow, aiMove.startCol);
-             isPlayerTurn = true; // Re-enable player turn on error
-             UIManager.updateGameStatusDisplay(ChessLogic.getGameStatus()); // Clear thinking message
+             isPlayerTurn = true;
+             UIManager.updateGameStatusDisplay(ChessLogic.getGameStatus());
              return;
         }
 
@@ -346,12 +301,10 @@ function triggerAIMove() {
 
         if (aiMoveResult.success) {
             console.log("AI move successful in logic:", aiMoveResult.moveNotation);
-            // Update 3D graphics for the AI's move
-            handleMoveResultGraphics(aiMoveResult, movingAiMesh);
-            // Update UI (turn indicator, history, captures, status)
-            updateUI();
+            handleMoveResultGraphics(aiMoveResult, movingAiMesh); // Update graphics
+            updateUI(); // Update UI
         } else {
-            console.error("AI move failed validation!", aiMove); // Should not happen with getRandomMove
+            console.error("AI move failed validation!", aiMove); // Should ideally not happen if getBestMove is correct
         }
     } else {
         console.log("AI has no legal moves."); // Game is over
@@ -363,11 +316,10 @@ function triggerAIMove() {
         isPlayerTurn = true; // Re-enable player input
         console.log("Player's turn (White)...");
      } else {
-         isPlayerTurn = false; // Game over, disable input
+         isPlayerTurn = false; // Game over
          console.log("Game over.");
      }
-     // Ensure "Thinking" message is cleared by updating status display
-     UIManager.updateGameStatusDisplay(ChessLogic.getGameStatus());
+     UIManager.updateGameStatusDisplay(ChessLogic.getGameStatus()); // Update status display
 }
 
 // --- Drag and Drop Handlers (Optional Placeholders - Unchanged) ---
@@ -377,3 +329,4 @@ function onCanvasMouseUp(event) { /* ... placeholder ... */ }
 
 // --- Start the Application ---
 document.addEventListener('DOMContentLoaded', initApp);
+```
