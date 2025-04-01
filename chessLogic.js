@@ -34,7 +34,7 @@ let castlingRights = { // Tracks if castling is still possible
 };
 let enPassantTargetSquare = null; // Stores {row, col} of the square vulnerable to en passant, or null
 
-// --- Game State History for Undo ---
+// --- NEW: Game State History for Undo ---
 let gameStateHistory = []; // Stack to store previous game states
 
 // --- Initial Board Setup (Standard Chess Layout) ---
@@ -55,18 +55,27 @@ const initialBoardSetup = [
  * Initializes or resets the game state to the standard starting position.
  */
 function initializeGame() {
-    boardState = initialBoardSetup.map(row => row.map(piece => piece ? { ...piece, hasMoved: false } : null));
+    // Create a deep copy of the initial setup, adding 'hasMoved: false' to each piece
+    boardState = initialBoardSetup.map(row =>
+        row.map(piece => piece ? { ...piece, hasMoved: false } : null)
+    );
+    // Reset all state variables
     currentPlayer = COLORS.WHITE;
     moveHistory = [];
     capturedPieces = { [COLORS.WHITE]: [], [COLORS.BLACK]: [] };
     gameStatus = { isCheck: false, isCheckmate: false, isStalemate: false, winner: null };
-    castlingRights = { [COLORS.WHITE]: { kingSide: true, queenSide: true }, [COLORS.BLACK]: { kingSide: true, queenSide: true } };
+    castlingRights = {
+        [COLORS.WHITE]: { kingSide: true, queenSide: true },
+        [COLORS.BLACK]: { kingSide: true, queenSide: true },
+    };
     enPassantTargetSquare = null;
-    gameStateHistory = []; // Clear history
+    // --- MODIFIED: Clear game state history ---
+    gameStateHistory = [];
     console.log("Chess logic initialized for a new game.");
 }
 
-// --- Getter Functions ---
+// --- Getter Functions for Game State ---
+
 function getPieceAt(row, col) {
     if (!isWithinBoard(row, col)) return null;
     if (!boardState) { console.error("getPieceAt called before boardState initialized!"); return null; }
@@ -79,8 +88,12 @@ function getMoveHistory() { return moveHistory; }
 function getGameStatus() { return gameStatus; }
 
 // --- Move Generation & Validation ---
-function isWithinBoard(row, col) { return row >= 0 && row < 8 && col >= 0 && col < 8; }
-function generatePseudoLegalMoves(startRow, startCol) { /* ... (code unchanged from previous version) ... */
+
+function isWithinBoard(row, col) {
+    return row >= 0 && row < 8 && col >= 0 && col < 8;
+}
+
+function generatePseudoLegalMoves(startRow, startCol) {
     const piece = getPieceAt(startRow, startCol);
     if (!piece) return [];
 
@@ -169,7 +182,8 @@ function generatePseudoLegalMoves(startRow, startCol) { /* ... (code unchanged f
     }
     return moves;
 }
-function isSquareAttacked(targetRow, targetCol, attackerColor) { /* ... (code unchanged from previous version) ... */
+
+function isSquareAttacked(targetRow, targetCol, attackerColor) {
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
             const piece = getPieceAt(r, c);
@@ -181,7 +195,8 @@ function isSquareAttacked(targetRow, targetCol, attackerColor) { /* ... (code un
     }
     return false;
 }
-function generateAttackMovesIgnoringTurn(startRow, startCol) { /* ... (code unchanged from previous version) ... */
+
+function generateAttackMovesIgnoringTurn(startRow, startCol) {
      const piece = getPieceAt(startRow, startCol);
     if (!piece) return [];
     const moves = [];
@@ -208,7 +223,8 @@ function generateAttackMovesIgnoringTurn(startRow, startCol) { /* ... (code unch
     }
     return moves;
 }
-function findKing(kingColor) { /* ... (code unchanged from previous version) ... */
+
+function findKing(kingColor) {
     if (!boardState) { console.error("findKing called before boardState initialized!"); return null; }
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
@@ -219,39 +235,62 @@ function findKing(kingColor) { /* ... (code unchanged from previous version) ...
     console.error("King not found for color:", kingColor);
     return null;
 }
-function isKingInCheck(playerColor) { /* ... (code unchanged from previous version) ... */
+
+function isKingInCheck(playerColor) {
     const kingPos = findKing(playerColor);
     if (!kingPos) return false;
     const opponentColor = playerColor === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE;
     return isSquareAttacked(kingPos.row, kingPos.col, opponentColor);
 }
-function getValidMovesForPiece(startRow, startCol) { /* ... (code unchanged from previous version) ... */
+
+function getValidMovesForPiece(startRow, startCol) {
     const piece = getPieceAt(startRow, startCol);
     if (!piece || piece.color !== currentPlayer) return [];
 
     const pseudoLegalMoves = generatePseudoLegalMoves(startRow, startCol);
     const legalMoves = [];
     const originalBoardState = boardState.map(row => row.map(p => p ? {...p} : null));
-    // const originalEnPassant = enPassantTargetSquare ? {...enPassantTargetSquare} : null; // No need to restore this in simulation check
+    // No need to store/restore enPassantTargetSquare for this check
 
     for (const move of pseudoLegalMoves) {
         let tempBoard = originalBoardState.map(row => row.map(p => p ? {...p} : null));
         let tempPiece = tempBoard[startRow][startCol];
+        if (!tempPiece) continue; // Should not happen if piece exists initially
+
         tempBoard[move.row][move.col] = tempPiece;
         tempBoard[startRow][startCol] = null;
         if (move.isEnPassant) {
              const capturedPawnRow = startRow;
              const capturedPawnCol = move.col;
-             tempBoard[capturedPawnRow][capturedPawnCol] = null;
+             if (isWithinBoard(capturedPawnRow, capturedPawnCol)) { // Bounds check
+                 tempBoard[capturedPawnRow][capturedPawnCol] = null;
+             }
         }
-        const realBoardState = boardState;
-        boardState = tempBoard; // Temporarily point boardState to tempBoard for isKingInCheck
-        if (!isKingInCheck(currentPlayer)) legalMoves.push(move);
-        boardState = realBoardState; // Restore boardState
+        // Simulate castling rook move on temp board if needed for check validation
+        if (move.isCastling) {
+            const rookStartCol = move.isCastling === 'kingSide' ? 7 : 0;
+            const rookEndCol = move.isCastling === 'kingSide' ? 5 : 3;
+            let tempRook = tempBoard[startRow][rookStartCol];
+            if (tempRook) {
+                tempBoard[startRow][rookEndCol] = tempRook;
+                tempBoard[startRow][rookStartCol] = null;
+            }
+        }
+
+        const realBoardState = boardState; // Backup real board reference
+        boardState = tempBoard; // Point check functions to the temporary board
+
+        // Check if the current player's king is safe after the move
+        if (!isKingInCheck(currentPlayer)) {
+            legalMoves.push(move);
+        }
+
+        boardState = realBoardState; // Restore real board reference
     }
     return legalMoves;
 }
-function getAllLegalMovesForCurrentPlayer() { /* ... (code unchanged from previous version) ... */
+
+function getAllLegalMovesForCurrentPlayer() {
     const allMoves = [];
     if (!boardState) { console.error("getAllLegalMovesForCurrentPlayer called before boardState initialized!"); return []; }
     for (let r = 0; r < 8; r++) {
@@ -265,7 +304,8 @@ function getAllLegalMovesForCurrentPlayer() { /* ... (code unchanged from previo
     }
     return allMoves;
 }
-function getRandomMoveForComputer() { /* ... (code unchanged from previous version) ... */
+
+function getRandomMoveForComputer() {
     const legalMoves = getAllLegalMovesForCurrentPlayer();
     if (legalMoves.length === 0) { console.log("getRandomMoveForComputer: No legal moves found."); return null; }
     const randomIndex = Math.floor(Math.random() * legalMoves.length);
@@ -273,7 +313,8 @@ function getRandomMoveForComputer() { /* ... (code unchanged from previous versi
     console.log("getRandomMoveForComputer: Selected move -", randomMove);
     return randomMove;
 }
-function evaluateBoardMaterial() { /* ... (code unchanged from previous version) ... */
+
+function evaluateBoardMaterial() {
     const pieceValues = { [PIECE_TYPES.PAWN]: 1, [PIECE_TYPES.KNIGHT]: 3, [PIECE_TYPES.BISHOP]: 3, [PIECE_TYPES.ROOK]: 5, [PIECE_TYPES.QUEEN]: 9, [PIECE_TYPES.KING]: 0 };
     let totalScore = 0;
     if (!boardState) { console.error("evaluateBoardMaterial called before boardState initialized!"); return 0; }
@@ -289,9 +330,16 @@ function evaluateBoardMaterial() { /* ... (code unchanged from previous version)
     }
     return totalScore;
 }
-function updateGameStatus() { /* ... (code unchanged from previous version) ... */
+
+function updateGameStatus() {
+    // Ensure currentPlayer is valid before proceeding
+     if (!currentPlayer) {
+         console.error("updateGameStatus called with invalid currentPlayer state.");
+         return;
+     }
     gameStatus.isCheck = isKingInCheck(currentPlayer);
     const hasLegalMoves = getAllLegalMovesForCurrentPlayer().length > 0;
+
     if (gameStatus.isCheck && !hasLegalMoves) {
         gameStatus.isCheckmate = true;
         gameStatus.winner = currentPlayer === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE;
@@ -306,7 +354,8 @@ function updateGameStatus() { /* ... (code unchanged from previous version) ... 
         gameStatus.winner = null;
     }
 }
-function makeMove(startRow, startCol, endRow, endCol, promotionPieceType = null) { /* ... (code unchanged from previous version, includes history push) ... */
+
+function makeMove(startRow, startCol, endRow, endCol, promotionPieceType = null) {
     const pieceToMove = getPieceAt(startRow, startCol);
     if (!pieceToMove || pieceToMove.color !== currentPlayer) {
         console.warn("Invalid move attempt: No piece or wrong color.", {startRow, startCol, currentPlayer});
@@ -318,6 +367,7 @@ function makeMove(startRow, startCol, endRow, endCol, promotionPieceType = null)
          console.warn("Invalid move attempt: Move not found in legal moves.", {startRow, startCol, endRow, endCol, piece: pieceToMove.type});
         return { success: false, move: null, capturedPiece: null, moveNotation: "", specialMoves: {} };
     }
+
     const promotionRank = currentPlayer === COLORS.WHITE ? 0 : 7;
     if (pieceToMove.type === PIECE_TYPES.PAWN && endRow === promotionRank) {
         if (!promotionPieceType) promotionPieceType = PIECE_TYPES.QUEEN;
@@ -325,19 +375,24 @@ function makeMove(startRow, startCol, endRow, endCol, promotionPieceType = null)
     }
     if (moveDetails.promotion && !promotionPieceType) promotionPieceType = moveDetails.promotion;
 
+    // Store State BEFORE Making Move
     const previousState = {
         boardState: boardState.map(row => row.map(p => p ? {...p} : null)),
         currentPlayer: currentPlayer,
         castlingRights: JSON.parse(JSON.stringify(castlingRights)),
         enPassantTargetSquare: enPassantTargetSquare ? {...enPassantTargetSquare} : null,
+        // Store captured piece counts for more robust undo if needed later
+        // capturedWhiteCount: capturedPieces[COLORS.WHITE].length,
+        // capturedBlackCount: capturedPieces[COLORS.BLACK].length,
     };
     gameStateHistory.push(previousState);
 
+    // Execute the Move and Update State
     let capturedPiece = boardState[endRow][endCol] ? { ...boardState[endRow][endCol] } : null;
     const specialMovesResult = {};
     let enPassantCaptureCoords = null;
     let castledRookMove = null;
-    enPassantTargetSquare = null;
+    enPassantTargetSquare = null; // Reset en passant target
     let movingPieceCopy = { ...pieceToMove };
 
     if (moveDetails.isEnPassant) {
@@ -347,14 +402,14 @@ function makeMove(startRow, startCol, endRow, endCol, promotionPieceType = null)
         specialMovesResult.enPassantCapture = true;
         enPassantCaptureCoords = { row: capturedPawnRow, col: capturedPawnCol };
     }
-    if (capturedPiece) capturedPieces[previousState.currentPlayer].push(capturedPiece);
+    if (capturedPiece) capturedPieces[previousState.currentPlayer].push(capturedPiece); // Add to previous player's captures
     boardState[endRow][endCol] = movingPieceCopy;
     boardState[startRow][startCol] = null;
     movingPieceCopy.hasMoved = true;
     if (moveDetails.isCastling) {
         specialMovesResult.castled = moveDetails.isCastling;
         const rookStartCol = moveDetails.isCastling === 'kingSide' ? 7 : 0; const rookEndCol = moveDetails.isCastling === 'kingSide' ? 5 : 3;
-        const rook = boardState[startRow][rookStartCol];
+        const rook = boardState[startRow][rookStartCol]; // Get ref before copy
         if (rook && rook.type === PIECE_TYPES.ROOK) {
             let rookCopy = { ...rook }; boardState[startRow][rookEndCol] = rookCopy; boardState[startRow][rookStartCol] = null; rookCopy.hasMoved = true;
             castledRookMove = { startRow: startRow, startCol: rookStartCol, endRow: startRow, endCol: rookEndCol };
@@ -365,23 +420,30 @@ function makeMove(startRow, startCol, endRow, endCol, promotionPieceType = null)
          boardState[endRow][endCol].type = finalPromotionType; specialMovesResult.promotion = finalPromotionType;
     }
     if (moveDetails.isDoublePawnPush) enPassantTargetSquare = { row: (startRow + endRow) / 2, col: startCol };
+
+    // Update Castling Rights (use previous player's color)
     if (movingPieceCopy.type === PIECE_TYPES.KING) { castlingRights[previousState.currentPlayer].kingSide = false; castlingRights[previousState.currentPlayer].queenSide = false; }
     else if (movingPieceCopy.type === PIECE_TYPES.ROOK) { const homeRank = previousState.currentPlayer === COLORS.WHITE ? 7 : 0; if (startRow === homeRank) { if (startCol === 0) castlingRights[previousState.currentPlayer].queenSide = false; if (startCol === 7) castlingRights[previousState.currentPlayer].kingSide = false; } }
     if (capturedPiece && capturedPiece.type === PIECE_TYPES.ROOK) { const opponentColor = previousState.currentPlayer === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE; const opponentHomeRank = opponentColor === COLORS.WHITE ? 7 : 0; if(endRow === opponentHomeRank) { if (endCol === 0) castlingRights[opponentColor].queenSide = false; if (endCol === 7) castlingRights[opponentColor].kingSide = false; } }
 
+    // Switch Player Turn
     currentPlayer = (previousState.currentPlayer === COLORS.WHITE) ? COLORS.BLACK : COLORS.WHITE;
+    // Update status for the NEW current player
     updateGameStatus();
+
     const moveNotation = generateAlgebraicNotation( pieceToMove, startRow, startCol, endRow, endCol, capturedPiece, moveDetails.isCastling, specialMovesResult.promotion, gameStatus.isCheck, gameStatus.isCheckmate, moveDetails.isEnPassant );
     moveHistory.push(moveNotation);
     console.log(`Move executed: ${moveNotation}. Turn: ${currentPlayer}. Check: ${gameStatus.isCheck}`);
+
     const finalPieceOnBoard = boardState[endRow][endCol];
     const moveDataForReturn = { startRow: startRow, startCol: startCol, endRow: endRow, endCol: endCol, piece: { type: finalPieceOnBoard.type, color: finalPieceOnBoard.color }, promotion: specialMovesResult.promotion || null };
     return { success: true, move: moveDataForReturn, capturedPiece: capturedPiece, moveNotation: moveNotation, specialMoves: specialMovesResult, castledRookMove: castledRookMove, enPassantCaptureCoords: enPassantCaptureCoords };
 }
-function undoMove() { /* ... (code unchanged from previous version) ... */
+
+function undoMove() {
     if (gameStateHistory.length === 0) {
         console.warn("Undo failed: No history available.");
-        return false; // Nothing to undo
+        return false;
     }
     const previousState = gameStateHistory.pop();
     boardState = previousState.boardState;
@@ -389,12 +451,37 @@ function undoMove() { /* ... (code unchanged from previous version) ... */
     castlingRights = previousState.castlingRights;
     enPassantTargetSquare = previousState.enPassantTargetSquare;
     if (moveHistory.length > 0) moveHistory.pop();
-    console.warn("UndoMove: Captured piece list restoration is simplified/not fully implemented.");
-    updateGameStatus();
+
+    // --- Restore Captured Pieces (Simplified Approach) ---
+    // Recalculate captured pieces based on current board vs initial state
+    // This isn't perfect but avoids complex state saving for captures.
+    const initialPieceCounts = {};
+    const currentPieceCounts = {};
+    initialBoardSetup.flat().forEach(p => { if(p) initialPieceCounts[p.color + p.type] = (initialPieceCounts[p.color + p.type] || 0) + 1; });
+    boardState.flat().forEach(p => { if(p) currentPieceCounts[p.color + p.type] = (currentPieceCounts[p.color + p.type] || 0) + 1; });
+
+    capturedPieces = { [COLORS.WHITE]: [], [COLORS.BLACK]: [] };
+    for (const key in initialPieceCounts) {
+        const initialCount = initialPieceCounts[key];
+        const currentCount = currentPieceCounts[key] || 0;
+        const diff = initialCount - currentCount;
+        if (diff > 0) {
+            const color = key.startsWith(COLORS.WHITE) ? COLORS.WHITE : COLORS.BLACK;
+            const type = key.replace(color, '');
+            const opponentColor = color === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE;
+            for (let i = 0; i < diff; i++) {
+                capturedPieces[opponentColor].push({ type: type, color: color }); // Add to opponent's capture list
+            }
+        }
+    }
+    // --- End Simplified Captured Piece Restoration ---
+
+    updateGameStatus(); // Update check/mate/stalemate status
     console.log("Move undone. Current player:", currentPlayer);
     return true;
 }
-function generateAlgebraicNotation(piece, startRow, startCol, endRow, endCol, capturedPiece, castlingType, promotionType, isCheck, isCheckmate, wasEnPassantCapture) { /* ... (code unchanged from previous version) ... */
+
+function generateAlgebraicNotation(piece, startRow, startCol, endRow, endCol, capturedPiece, castlingType, promotionType, isCheck, isCheckmate, wasEnPassantCapture) {
     if (castlingType === 'kingSide') return isCheckmate ? 'O-O#' : (isCheck ? 'O-O+' : 'O-O');
     if (castlingType === 'queenSide') return isCheckmate ? 'O-O-O#' : (isCheck ? 'O-O-O+' : 'O-O-O');
     const pieceSymbols = { pawn: "", rook: "R", knight: "N", bishop: "B", queen: "Q", king: "K" };
@@ -402,6 +489,7 @@ function generateAlgebraicNotation(piece, startRow, startCol, endRow, endCol, ca
     const pieceSymbol = (piece.type === PIECE_TYPES.PAWN && !capturedPiece) ? "" : pieceSymbols[piece.type];
     if (piece.type === PIECE_TYPES.PAWN && capturedPiece) notation += files[startCol];
     else if (piece.type !== PIECE_TYPES.PAWN) notation += pieceSymbol;
+    // TODO: Add disambiguation logic here if necessary
     if (capturedPiece) notation += "x";
     notation += files[endCol] + ranks[endRow];
     if (promotionType) notation += "=" + pieceSymbols[promotionType].toUpperCase();
@@ -409,139 +497,82 @@ function generateAlgebraicNotation(piece, startRow, startCol, endRow, endCol, ca
     return notation;
 }
 
-// --- NEW: Minimax AI Logic ---
+// --- Minimax AI Logic ---
 
-/**
- * The recursive Minimax function.
- * @param {number} depth - How many moves deep to search.
- * @param {boolean} isMaximizingPlayer - True if the current node represents the player trying to maximize the score (White), False for minimizing (Black).
- * @returns {number} The evaluated score of the best reachable position at the given depth.
- */
 function minimax(depth, isMaximizingPlayer) {
-    // Base case: maximum depth reached or game is over
-    const currentStatus = getGameStatus(); // Check current status within simulation
+    const currentStatus = getGameStatus();
     if (depth === 0 || currentStatus.isCheckmate || currentStatus.isStalemate) {
-        // Handle terminal nodes explicitly
-        if (currentStatus.isCheckmate) {
-            // If checkmate, return a very high/low score depending on whose turn it would have been
-            // If the maximizing player (White) was checkmated, return very low score.
-            // If the minimizing player (Black) was checkmated, return very high score.
-            return isMaximizingPlayer ? -Infinity : Infinity;
-        }
-        if (currentStatus.isStalemate) {
-            return 0; // Stalemate is a draw
-        }
-        // If depth is 0, return static evaluation
-        return evaluateBoardMaterial();
+        if (currentStatus.isCheckmate) return isMaximizingPlayer ? -Infinity : Infinity; // Checkmate is worst/best possible outcome
+        if (currentStatus.isStalemate) return 0;
+        return evaluateBoardMaterial(); // Evaluate at max depth
     }
 
-    const legalMoves = getAllLegalMovesForCurrentPlayer(); // Get moves for the player whose turn it is IN THE SIMULATION
+    const legalMoves = getAllLegalMovesForCurrentPlayer();
+    // If no moves possible from this simulated state, evaluate board (should match checkmate/stalemate above)
+    if (legalMoves.length === 0) {
+         return evaluateBoardMaterial();
+    }
 
-    if (isMaximizingPlayer) { // White's turn (or simulating White's turn) - maximize score
+    if (isMaximizingPlayer) { // White's turn (or simulating White) - maximize score
         let maxEval = -Infinity;
         for (const move of legalMoves) {
-            // Simulate the move
             const moveResult = makeMove(move.startRow, move.startCol, move.endRow, move.endCol, move.promotion);
             if (moveResult.success) {
-                // Recursively call minimax for the opponent's turn (minimizing player)
-                const evalScore = minimax(depth - 1, false); // Depth decreases, switch player
+                const evalScore = minimax(depth - 1, false); // Opponent minimizes
                 maxEval = Math.max(maxEval, evalScore);
-                // Undo the move to backtrack
                 undoMove();
-            } else {
-                 console.error("Minimax: makeMove failed during simulation!", move); // Should not happen if getAllLegalMoves is correct
-            }
+            } else { console.error("Minimax (Max): makeMove failed!", move); }
         }
-         // If no legal moves were possible from this state (should be caught by base case, but safety check)
-         if (legalMoves.length === 0) {
-             return evaluateBoardMaterial(); // Or handle checkmate/stalemate explicitly again
-         }
         return maxEval;
-    } else { // Black's turn (or simulating Black's turn) - minimize score (good for Black is bad for White)
+    } else { // Black's turn (or simulating Black) - minimize score
         let minEval = Infinity;
         for (const move of legalMoves) {
-            // Simulate the move
             const moveResult = makeMove(move.startRow, move.startCol, move.endRow, move.endCol, move.promotion);
              if (moveResult.success) {
-                // Recursively call minimax for the opponent's turn (maximizing player)
-                const evalScore = minimax(depth - 1, true); // Depth decreases, switch player
+                const evalScore = minimax(depth - 1, true); // Opponent maximizes
                 minEval = Math.min(minEval, evalScore);
-                // Undo the move to backtrack
                 undoMove();
-            } else {
-                 console.error("Minimax: makeMove failed during simulation!", move);
-            }
+            } else { console.error("Minimax (Min): makeMove failed!", move); }
         }
-         // If no legal moves were possible
-         if (legalMoves.length === 0) {
-             return evaluateBoardMaterial(); // Or handle checkmate/stalemate explicitly again
-         }
         return minEval;
     }
 }
 
-/**
- * Finds the best move for the current player using the Minimax algorithm.
- * @param {number} depth - The search depth (how many moves ahead to look). Higher depth = smarter but slower.
- * @returns {object | null} The best move object { startRow, startCol, endRow, endCol, ... } or null if no moves available.
- */
 function getBestMoveMinimax(depth) {
     const legalMoves = getAllLegalMovesForCurrentPlayer();
-    if (legalMoves.length === 0) {
-        console.log("getBestMoveMinimax: No legal moves available.");
-        return null;
-    }
+    if (legalMoves.length === 0) { console.log("getBestMoveMinimax: No legal moves available."); return null; }
 
     let bestMove = null;
     let bestValue;
-
-    // Determine if the *actual* current player is maximizing (White) or minimizing (Black)
     const isMaximizing = (currentPlayer === COLORS.WHITE);
     bestValue = isMaximizing ? -Infinity : Infinity;
 
     console.log(`getBestMoveMinimax: Evaluating moves for ${currentPlayer} at depth ${depth}. Maximizing: ${isMaximizing}`);
 
-    // Iterate through all possible legal moves for the current player
-    for (const move of legalMoves) {
-        // Simulate making the move
-        const moveResult = makeMove(move.startRow, move.startCol, move.endRow, move.endCol, move.promotion);
+    // Shuffle moves for variety if scores are equal (optional)
+    // legalMoves.sort(() => Math.random() - 0.5);
 
+    for (const move of legalMoves) {
+        const moveResult = makeMove(move.startRow, move.startCol, move.endRow, move.endCol, move.promotion);
         if (moveResult.success) {
-            // Call minimax to evaluate the position AFTER this move, from the opponent's perspective
-            // The opponent will play optimally from here, so we pass !isMaximizing
-            const boardValue = minimax(depth - 1, !isMaximizing);
-            // Undo the move to restore the original state for the next iteration
+            const boardValue = minimax(depth - 1, !isMaximizing); // Evaluate from opponent's perspective
             undoMove();
 
-            // Debug log for each move's evaluation
-            // console.log(`Move: ${moveResult.moveNotation || 'N/A'}, Score: ${boardValue}`);
-
-            // Compare the evaluation with the best value found so far
-            if (isMaximizing) { // White wants to maximize the score
-                if (boardValue > bestValue) {
-                    bestValue = boardValue;
-                    bestMove = move; // Store the move object itself
-                }
-            } else { // Black wants to minimize the score (best for Black = lowest score for White)
-                if (boardValue < bestValue) {
-                    bestValue = boardValue;
-                    bestMove = move; // Store the move object itself
-                }
+            if (isMaximizing) {
+                if (boardValue > bestValue) { bestValue = boardValue; bestMove = move; }
+            } else {
+                if (boardValue < bestValue) { bestValue = boardValue; bestMove = move; }
             }
-        } else {
-            console.error("getBestMoveMinimax: makeMove failed during evaluation!", move);
-        }
+        } else { console.error("getBestMoveMinimax: makeMove failed during evaluation!", move); }
     }
 
-    // If multiple moves have the same best value, Minimax typically picks the first one found.
-    // Could add randomness here if desired for variety.
     if (!bestMove && legalMoves.length > 0) {
-        console.warn("Minimax couldn't determine a best move, picking first legal move.");
-        bestMove = legalMoves[0]; // Fallback if something went wrong
+        console.warn("Minimax couldn't determine a best move (maybe all moves lead to same score?), picking first legal move.");
+        bestMove = legalMoves[0]; // Fallback
     }
 
     console.log(`getBestMoveMinimax: Best move found: ${bestMove ? JSON.stringify(bestMove) : 'None'}, Value: ${bestValue}`);
-    return bestMove; // Return the full move object { startRow, startCol, endRow, endCol, ... }
+    return bestMove;
 }
 
 
@@ -557,10 +588,10 @@ export {
     getValidMovesForPiece,
     makeMove,
     undoMove,
-    getRandomMoveForComputer,
+    getRandomMoveForComputer, // Keep random move function for potential 'Easy' mode later
     evaluateBoardMaterial,
-    minimax, // Export minimax if needed for debugging/advanced use
-    getBestMoveMinimax, // <-- NEWLY ADDED
+    minimax, // Export minimax maybe for debugging
+    getBestMoveMinimax, // Export the main AI function
     PIECE_TYPES,
     COLORS,
 };
