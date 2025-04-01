@@ -509,6 +509,34 @@ function getAllLegalMovesForCurrentPlayer() {
     return allMoves;
 }
 
+
+/** <-- NEW FUNCTION ADDED HERE -->
+ * Selects a random legal move for the current player.
+ * Assumes this is called only when it is the computer's turn.
+ * @returns {object | null} A random move object { startRow, startCol, endRow, endCol, ... } or null if no legal moves exist.
+ */
+function getRandomMoveForComputer() {
+    // Use the existing function to get all legal moves for whoever's turn it currently is
+    const legalMoves = getAllLegalMovesForCurrentPlayer();
+
+    // If there are no moves, the game is over (checkmate or stalemate)
+    if (legalMoves.length === 0) {
+        console.log("getRandomMoveForComputer: No legal moves found.");
+        return null;
+    }
+
+    // Pick a random index from the list of legal moves
+    const randomIndex = Math.floor(Math.random() * legalMoves.length);
+
+    // Get the move object at that random index
+    const randomMove = legalMoves[randomIndex];
+    console.log("getRandomMoveForComputer: Selected move -", randomMove);
+
+    // Return the randomly selected move object
+    return randomMove;
+}
+
+
 /**
  * Updates the game status (check, checkmate, stalemate) based on the current board state
  * and the player whose turn it is *about to be*. Should be called *after* a move is made.
@@ -809,6 +837,7 @@ function generateAlgebraicNotation(piece, startRow, startCol, endRow, endCol, ca
 
 
 // --- Export Public Functions and Constants ---
+// <-- MODIFIED EXPORT BLOCK -->
 export {
     initializeGame,
     getPieceAt,
@@ -819,6 +848,7 @@ export {
     getGameStatus,
     getValidMovesForPiece, // Useful for highlighting legal moves in the UI
     makeMove,             // The main function to execute a move
+    getRandomMoveForComputer, // <-- NEWLY ADDED
     PIECE_TYPES,          // Export constants for use in other modules
     COLORS,
 };
