@@ -445,36 +445,25 @@ function getValidMovesForPiece(startRow, startCol) {
     const legalMoves = [];
 
     // Store original state to revert after simulation
-    // IMPORTANT: Need a deep copy mechanism if piece objects are complex or mutated directly
     const originalBoardState = boardState.map(row => row.map(p => p ? {...p} : null));
     const originalEnPassant = enPassantTargetSquare ? {...enPassantTargetSquare} : null;
-    // Castling rights don't change during simulation of a single move's legality check
 
     for (const move of pseudoLegalMoves) {
         // --- Simulate the move ---
-        const targetPiece = originalBoardState[move.row][move.col]; // Piece being potentially captured on original board
         boardState[move.row][move.col] = boardState[startRow][startCol]; // Move piece
         boardState[startRow][startCol] = null; // Empty start square
-
-        // Simulate special move side effects (simplified for check validation)
         if (move.isEnPassant) {
-             const capturedPawnRow = startRow; // Pawn being captured is on same row as moving pawn's start
-             const capturedPawnCol = move.col; // Pawn being captured is on same col as target square
-             boardState[capturedPawnRow][capturedPawnCol] = null; // Remove captured pawn
+             const capturedPawnRow = startRow;
+             const capturedPawnCol = move.col;
+             boardState[capturedPawnRow][capturedPawnCol] = null;
         }
-        // Castling simulation: Move the rook temporarily as well for attack checks if needed,
-        // but primarily we care about the king's final position.
-        // The check is on the king's final position and path, already done in pseudo-legal generation.
-
         // --- Check if the king is in check AFTER the simulated move ---
-        if (!isKingInCheck(currentPlayer)) { // Check the current player's king
-            legalMoves.push(move); // If the king is NOT in check, the move is legal
+        if (!isKingInCheck(currentPlayer)) {
+            legalMoves.push(move);
         }
-
-        // --- Revert the board state for the next simulation ---
-        // Restore board from the deep copy made before the loop
+        // --- Revert the board state ---
         boardState = originalBoardState.map(row => row.map(p => p ? {...p} : null));
-        enPassantTargetSquare = originalEnPassant ? {...originalEnPassant} : null; // Restore en passant state
+        enPassantTargetSquare = originalEnPassant ? {...originalEnPassant} : null;
     }
 
     return legalMoves;
@@ -490,17 +479,15 @@ function getAllLegalMovesForCurrentPlayer() {
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
             const piece = getPieceAt(r, c);
-            // If it's a piece belonging to the current player
             if (piece && piece.color === currentPlayer) {
-                const moves = getValidMovesForPiece(r, c); // Get all legal moves for this piece
+                const moves = getValidMovesForPiece(r, c);
                 moves.forEach(move => {
-                    // Add the start coordinates to each move object
                     allMoves.push({
                         startRow: r,
                         startCol: c,
                         endRow: move.row,
                         endCol: move.col,
-                        ...move // Include all other details (isCapture, isCastling, etc.)
+                        ...move
                     });
                 });
             }
@@ -510,29 +497,20 @@ function getAllLegalMovesForCurrentPlayer() {
 }
 
 
-/** <-- NEW FUNCTION ADDED HERE -->
+/**
  * Selects a random legal move for the current player.
  * Assumes this is called only when it is the computer's turn.
  * @returns {object | null} A random move object { startRow, startCol, endRow, endCol, ... } or null if no legal moves exist.
  */
 function getRandomMoveForComputer() {
-    // Use the existing function to get all legal moves for whoever's turn it currently is
     const legalMoves = getAllLegalMovesForCurrentPlayer();
-
-    // If there are no moves, the game is over (checkmate or stalemate)
     if (legalMoves.length === 0) {
         console.log("getRandomMoveForComputer: No legal moves found.");
         return null;
     }
-
-    // Pick a random index from the list of legal moves
     const randomIndex = Math.floor(Math.random() * legalMoves.length);
-
-    // Get the move object at that random index
     const randomMove = legalMoves[randomIndex];
     console.log("getRandomMoveForComputer: Selected move -", randomMove);
-
-    // Return the randomly selected move object
     return randomMove;
 }
 
@@ -542,222 +520,179 @@ function getRandomMoveForComputer() {
  * and the player whose turn it is *about to be*. Should be called *after* a move is made.
  */
 function updateGameStatus() {
-    // Check the status for the player whose turn it now is
     gameStatus.isCheck = isKingInCheck(currentPlayer);
-
-    // Determine if the current player has any legal moves
     const hasLegalMoves = getAllLegalMovesForCurrentPlayer().length > 0;
 
-    // Checkmate: King is in check AND there are no legal moves
     if (gameStatus.isCheck && !hasLegalMoves) {
         gameStatus.isCheckmate = true;
-        gameStatus.winner = currentPlayer === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE; // The player who delivered checkmate wins
+        gameStatus.winner = currentPlayer === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE;
         console.log("Checkmate!", gameStatus.winner, "wins.");
-    }
-    // Stalemate: King is NOT in check AND there are no legal moves
-    else if (!gameStatus.isCheck && !hasLegalMoves) {
+    } else if (!gameStatus.isCheck && !hasLegalMoves) {
         gameStatus.isStalemate = true;
         gameStatus.winner = 'draw';
         console.log("Stalemate! Draw.");
-    }
-    // Otherwise, the game continues
-    else {
+    } else {
         gameStatus.isCheckmate = false;
         gameStatus.isStalemate = false;
         gameStatus.winner = null;
     }
-
-    // TODO: Add checks for other draw conditions (insufficient material, fifty-move rule, threefold repetition)
+    // TODO: Add checks for other draw conditions
 }
 
 
 /**
  * Attempts to make a move on the board, performing full legality checks and updating game state.
- * Handles piece movement, captures, castling, en passant, promotion, turn switching,
- * castling rights updates, en passant target updates, and game status updates.
  * @param {number} startRow
  * @param {number} startCol
  * @param {number} endRow
  * @param {number} endCol
  * @param {string} [promotionPieceType=null] - Optional: type ('queen', 'rook', etc.) to promote a pawn to. Required if move is a promotion.
- * @returns {{ success: boolean, capturedPiece: object | null, moveNotation: string, specialMoves: object, castledRookMove?: object, enPassantCaptureCoords?: object }}
+ * @returns {{ success: boolean, move: object | null, capturedPiece: object | null, moveNotation: string, specialMoves: object, castledRookMove?: object, enPassantCaptureCoords?: object }} <-- MODIFIED RETURN TYPE
  * Result object indicating success, details of the move, and any captured piece.
- * `specialMoves` contains flags like { castled: 'kingSide'/'queenSide', enPassantCapture: true, promotion: 'queen' }
- * `castledRookMove` gives { startRow, startCol, endRow, endCol } for the rook if castling occurred.
- * `enPassantCaptureCoords` gives { row, col } of the pawn captured via en passant.
  */
 function makeMove(startRow, startCol, endRow, endCol, promotionPieceType = null) {
     const pieceToMove = getPieceAt(startRow, startCol);
-    // Basic check: Is there a piece, and is it the current player's?
     if (!pieceToMove || pieceToMove.color !== currentPlayer) {
         console.warn("Invalid move attempt: No piece or wrong color.", {startRow, startCol, currentPlayer});
-        return { success: false, capturedPiece: null, moveNotation: "", specialMoves: {} };
+        return { success: false, move: null, capturedPiece: null, moveNotation: "", specialMoves: {} }; // <-- Added move: null
     }
 
-    // Find the specific legal move among all possibilities for the selected piece
     const legalMoves = getValidMovesForPiece(startRow, startCol);
     const moveDetails = legalMoves.find(m => m.row === endRow && m.col === endCol);
 
-    // Check if the intended move is actually in the list of legal moves
     if (!moveDetails) {
          console.warn("Invalid move attempt: Move not found in legal moves.", {startRow, startCol, endRow, endCol, piece: pieceToMove.type});
-        // console.log("Available legal moves:", legalMoves); // For debugging
-        return { success: false, capturedPiece: null, moveNotation: "", specialMoves: {} };
+        return { success: false, move: null, capturedPiece: null, moveNotation: "", specialMoves: {} }; // <-- Added move: null
     }
 
-     // --- Promotion Check ---
      const promotionRank = currentPlayer === COLORS.WHITE ? 0 : 7;
      if (pieceToMove.type === PIECE_TYPES.PAWN && endRow === promotionRank) {
          if (!promotionPieceType) {
-             // In a real UI, prompt the user. Here, we might default or fail.
              console.warn("Promotion required but no piece type specified. Defaulting to Queen.");
              promotionPieceType = PIECE_TYPES.QUEEN;
-             // Alternatively, fail the move if promotion type is mandatory:
-             // return { success: false, capturedPiece: null, moveNotation: "Promotion piece type required", specialMoves: {} };
          }
-         // Validate the provided promotion type
           else if (![PIECE_TYPES.QUEEN, PIECE_TYPES.ROOK, PIECE_TYPES.BISHOP, PIECE_TYPES.KNIGHT].includes(promotionPieceType)) {
              console.warn("Invalid promotion type provided, defaulting to Queen:", promotionPieceType);
              promotionPieceType = PIECE_TYPES.QUEEN;
          }
      }
-     // Ensure promotion type from moveDetails (if generated) matches or is set
      if (moveDetails.promotion && !promotionPieceType) {
          promotionPieceType = moveDetails.promotion;
      }
 
 
     // --- Execute the Move and Update State ---
-    let capturedPiece = boardState[endRow][endCol]; // Store potential capture before overwriting square
-    const specialMovesResult = {}; // Store flags for special move occurrences
-    let enPassantCaptureCoords = null; // Store coords of pawn captured via en passant for UI
-    let castledRookMove = null; // Store rook move details for UI if castling
+    let capturedPiece = boardState[endRow][endCol];
+    const specialMovesResult = {};
+    let enPassantCaptureCoords = null;
+    let castledRookMove = null;
 
-    // 1. Reset en passant target square (only one square is vulnerable per turn)
-    const previousEnPassantTarget = enPassantTargetSquare; // Needed for notation generation
+    const previousEnPassantTarget = enPassantTargetSquare;
     enPassantTargetSquare = null;
 
-    // 2. Handle En Passant capture (remove the captured pawn)
     if (moveDetails.isEnPassant) {
-        const capturedPawnRow = startRow; // Captured pawn is on the same rank as the moving pawn started
-        const capturedPawnCol = endCol;   // Captured pawn is on the same file as the target square
-        capturedPiece = boardState[capturedPawnRow][capturedPawnCol]; // Get the actual captured pawn object
-        boardState[capturedPawnRow][capturedPawnCol] = null; // Remove captured pawn from board
+        const capturedPawnRow = startRow;
+        const capturedPawnCol = endCol;
+        capturedPiece = boardState[capturedPawnRow][capturedPawnCol];
+        boardState[capturedPawnRow][capturedPawnCol] = null;
         specialMovesResult.enPassantCapture = true;
-        enPassantCaptureCoords = { row: capturedPawnRow, col: capturedPawnCol }; // Store coords for UI
+        enPassantCaptureCoords = { row: capturedPawnRow, col: capturedPawnCol };
         console.log("En passant capture at:", enPassantCaptureCoords);
     }
 
-    // 3. Update captured pieces list
     if (capturedPiece) {
-        // Add the captured piece to the list of pieces captured by the current player
         capturedPieces[currentPlayer].push(capturedPiece);
     }
 
-    // 4. Move the piece on the board array
-    boardState[endRow][endCol] = pieceToMove; // Place piece in the new square
-    boardState[startRow][startCol] = null; // Empty the starting square
-    pieceToMove.hasMoved = true; // Mark the piece as having moved (important for castling/pawn double move)
+    boardState[endRow][endCol] = pieceToMove;
+    boardState[startRow][startCol] = null;
+    pieceToMove.hasMoved = true;
 
-    // 5. Handle Castling rook move
     if (moveDetails.isCastling) {
         specialMovesResult.castled = moveDetails.isCastling;
-        const rookStartCol = moveDetails.isCastling === 'kingSide' ? 7 : 0; // H or A file
-        const rookEndCol = moveDetails.isCastling === 'kingSide' ? 5 : 3; // F or D file
-        const rook = boardState[startRow][rookStartCol]; // Get the rook from its starting position
+        const rookStartCol = moveDetails.isCastling === 'kingSide' ? 7 : 0;
+        const rookEndCol = moveDetails.isCastling === 'kingSide' ? 5 : 3;
+        const rook = boardState[startRow][rookStartCol];
         if (rook && rook.type === PIECE_TYPES.ROOK) {
-            boardState[startRow][rookEndCol] = rook; // Move rook to its castled position
-            boardState[startRow][rookStartCol] = null; // Empty rook's starting square
-            rook.hasMoved = true; // Mark rook as moved
-            // Store rook move details for the UI to update the 3D model
+            boardState[startRow][rookEndCol] = rook;
+            boardState[startRow][rookStartCol] = null;
+            rook.hasMoved = true;
              castledRookMove = { startRow: startRow, startCol: rookStartCol, endRow: startRow, endCol: rookEndCol };
              console.log("Castling performed:", moveDetails.isCastling);
         } else {
-            // This should ideally not happen if validation is correct
             console.error("Castling error: Rook not found or invalid at expected position!", {startRow, rookStartCol});
         }
     }
 
-    // 6. Handle Pawn Promotion (change piece type)
-    if (moveDetails.promotion || promotionPieceType) { // Check if promotion should occur
-         const finalPromotionType = promotionPieceType || moveDetails.promotion; // Use provided type or generated one
-         boardState[endRow][endCol].type = finalPromotionType; // Change the piece type on the board
+    if (moveDetails.promotion || promotionPieceType) {
+         const finalPromotionType = promotionPieceType || moveDetails.promotion;
+         boardState[endRow][endCol].type = finalPromotionType;
          specialMovesResult.promotion = finalPromotionType;
          console.log("Pawn promoted to:", finalPromotionType);
     }
 
-
-    // 7. Set new En Passant target square if pawn moved two steps
     if (moveDetails.isDoublePawnPush) {
-        // The vulnerable square is the one *behind* the pawn that moved
         enPassantTargetSquare = { row: (startRow + endRow) / 2, col: startCol };
         console.log("New en passant target:", enPassantTargetSquare);
     }
 
-    // 8. Update Castling Rights based on King/Rook movement or capture
-    // If King moved
+    // Update Castling Rights
     if (pieceToMove.type === PIECE_TYPES.KING) {
         castlingRights[currentPlayer].kingSide = false;
         castlingRights[currentPlayer].queenSide = false;
     }
-    // If Rook moved from its starting square
     else if (pieceToMove.type === PIECE_TYPES.ROOK) {
         const homeRank = currentPlayer === COLORS.WHITE ? 7 : 0;
         if (startRow === homeRank) {
-            if (startCol === 0) castlingRights[currentPlayer].queenSide = false; // A-file rook moved
-            if (startCol === 7) castlingRights[currentPlayer].kingSide = false; // H-file rook moved
+            if (startCol === 0) castlingRights[currentPlayer].queenSide = false;
+            if (startCol === 7) castlingRights[currentPlayer].kingSide = false;
         }
     }
-    // If a Rook is captured on its home square, revoke opponent's castling right for that side
     if (capturedPiece && capturedPiece.type === PIECE_TYPES.ROOK) {
          const opponentColor = currentPlayer === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE;
          const opponentHomeRank = opponentColor === COLORS.WHITE ? 7 : 0;
-         // Check if the capture happened on the opponent's home rank
          if(endRow === opponentHomeRank) {
-             if (endCol === 0) castlingRights[opponentColor].queenSide = false; // Opponent's A-file rook captured
-             if (endCol === 7) castlingRights[opponentColor].kingSide = false; // Opponent's H-file rook captured
+             if (endCol === 0) castlingRights[opponentColor].queenSide = false;
+             if (endCol === 7) castlingRights[opponentColor].kingSide = false;
          }
     }
 
-
-    // 9. Switch Player Turn
     currentPlayer = (currentPlayer === COLORS.WHITE) ? COLORS.BLACK : COLORS.WHITE;
-
-    // 10. Update Game Status (Check, Checkmate, Stalemate) for the NEW current player
     updateGameStatus();
 
-    // 11. Generate Algebraic Notation for the move
     const moveNotation = generateAlgebraicNotation(
-        pieceToMove, // Original piece info (before promotion)
-        startRow, startCol, endRow, endCol,
-        capturedPiece, // The piece that was captured (could be null)
-        moveDetails.isCastling, // Type of castling or undefined
-        specialMovesResult.promotion, // Type of promotion or undefined
-        gameStatus.isCheck, // Is the *new* current player in check?
-        gameStatus.isCheckmate, // Is it checkmate?
-        moveDetails.isEnPassant // Was this move an en passant capture?
+        pieceToMove, startRow, startCol, endRow, endCol,
+        capturedPiece, moveDetails.isCastling, specialMovesResult.promotion,
+        gameStatus.isCheck, gameStatus.isCheckmate, moveDetails.isEnPassant
     );
-    moveHistory.push(moveNotation); // Add notation to history
-
+    moveHistory.push(moveNotation);
 
     console.log(`Move executed: ${moveNotation}. Turn: ${currentPlayer}. Check: ${gameStatus.isCheck}`);
 
-    // Return detailed result object
+    // --- FIX: Include move details in the return object ---
+    const moveDataForReturn = {
+        startRow: startRow,
+        startCol: startCol,
+        endRow: endRow,
+        endCol: endCol,
+        piece: pieceToMove, // Include piece info
+        promotion: specialMovesResult.promotion // Include promotion result
+    };
+
     return {
         success: true,
-        capturedPiece: capturedPiece, // The piece object that was captured, or null
+        move: moveDataForReturn, // <-- ADDED THIS NESTED OBJECT
+        capturedPiece: capturedPiece,
         moveNotation: moveNotation,
-        specialMoves: specialMovesResult, // Flags for castling, promotion, en passant
-        castledRookMove: castledRookMove, // Rook move details if castling occurred
-        enPassantCaptureCoords: enPassantCaptureCoords // Coords of pawn captured via en passant
+        specialMoves: specialMovesResult,
+        castledRookMove: castledRookMove,
+        enPassantCaptureCoords: enPassantCaptureCoords
     };
 }
 
 
 /**
  * Generates standard algebraic notation (SAN) for a move.
- * Includes symbols for piece type, capture, destination, promotion, check, checkmate.
- * Handles castling notation. Basic disambiguation might be needed for complex cases.
  * @param {object} piece - The piece that moved (original type, before promotion).
  * @param {number} startRow
  * @param {number} startCol
@@ -772,72 +707,47 @@ function makeMove(startRow, startCol, endRow, endCol, promotionPieceType = null)
  * @returns {string} The move in standard algebraic notation.
  */
 function generateAlgebraicNotation(piece, startRow, startCol, endRow, endCol, capturedPiece, castlingType, promotionType, isCheck, isCheckmate, wasEnPassantCapture) {
-    // Handle castling notation first
     if (castlingType === 'kingSide') return isCheckmate ? 'O-O#' : (isCheck ? 'O-O+' : 'O-O');
     if (castlingType === 'queenSide') return isCheckmate ? 'O-O-O#' : (isCheck ? 'O-O-O+' : 'O-O-O');
 
-    // Standard piece symbols (Pawn is omitted unless capturing)
     const pieceSymbols = { pawn: "", rook: "R", knight: "N", bishop: "B", queen: "Q", king: "K" };
-    // Map array indices to standard chess file/rank notation
-    const files = "abcdefgh"; // col 0 -> a, col 7 -> h
-    const ranks = "87654321"; // row 0 -> 8, row 7 -> 1
+    const files = "abcdefgh";
+    const ranks = "87654321";
 
     let notation = "";
     const pieceSymbol = pieceSymbols[piece.type];
 
-    // Add piece symbol (unless pawn)
     if (piece.type !== PIECE_TYPES.PAWN) {
         notation += pieceSymbol;
-        // TODO: Add disambiguation if needed (e.g., Rdf8, N3e4).
-        // This requires checking if another piece of the same type could also move
-        // to the same destination square. Requires looking at all legal moves again.
-        // Example check:
-        // const otherPieces = findOtherSimilarPiecesThatCanMoveTo(piece.type, piece.color, endRow, endCol, startRow, startCol);
-        // if (otherPieces.length > 0) {
-        //     // Add start file, rank, or both if needed to distinguish
-        //     if (otherPieces.some(p => p.col !== startCol)) {
-        //         notation += files[startCol]; // Add start file
-        //     } else if (otherPieces.some(p => p.row !== startRow)) {
-        //         notation += ranks[startRow]; // Add start rank
-        //     } else {
-        //         notation += files[startCol] + ranks[startRow]; // Add both file and rank
-        //     }
-        // }
+        // TODO: Add disambiguation logic here if necessary
     }
 
-    // Add capture indication ('x')
     if (capturedPiece) {
-        // If pawn captures, include the starting file
         if (piece.type === PIECE_TYPES.PAWN) {
             notation += files[startCol];
         }
         notation += "x";
     }
 
-    // Add destination square
     notation += files[endCol] + ranks[endRow];
 
-    // Add promotion indication ('=Q', '=R', etc.)
     if (promotionType) {
-        notation += "=" + pieceSymbols[promotionType].toUpperCase();
+        // Use the actual promoted type's symbol, which might be different from the initial piece variable
+        const promotedSymbol = pieceSymbols[promotionType];
+        notation += "=" + promotedSymbol.toUpperCase();
     }
 
-    // Add check ('+') or checkmate ('#') symbol
     if (isCheckmate) {
         notation += "#";
     } else if (isCheck) {
         notation += "+";
     }
 
-    // Note: En passant capture notation looks like a normal pawn capture (e.g., exd6)
-    // The context of the game state implies it was en passant. Some notations add "e.p." but it's often omitted.
-
     return notation;
 }
 
 
 // --- Export Public Functions and Constants ---
-// <-- MODIFIED EXPORT BLOCK -->
 export {
     initializeGame,
     getPieceAt,
@@ -846,9 +756,9 @@ export {
     getCapturedPieces,
     getMoveHistory,
     getGameStatus,
-    getValidMovesForPiece, // Useful for highlighting legal moves in the UI
-    makeMove,             // The main function to execute a move
-    getRandomMoveForComputer, // <-- NEWLY ADDED
-    PIECE_TYPES,          // Export constants for use in other modules
+    getValidMovesForPiece,
+    makeMove,
+    getRandomMoveForComputer,
+    PIECE_TYPES,
     COLORS,
 };
