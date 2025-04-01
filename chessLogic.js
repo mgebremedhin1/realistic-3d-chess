@@ -554,7 +554,7 @@ function makeMove(startRow, startCol, endRow, endCol, promotionPieceType = null)
     const pieceToMove = getPieceAt(startRow, startCol);
     if (!pieceToMove || pieceToMove.color !== currentPlayer) {
         console.warn("Invalid move attempt: No piece or wrong color.", {startRow, startCol, currentPlayer});
-        return { success: false, move: null, capturedPiece: null, moveNotation: "", specialMoves: {} }; // <-- Added move: null
+        return { success: false, move: null, capturedPiece: null, moveNotation: "", specialMoves: {} }; // <-- Includes move: null
     }
 
     const legalMoves = getValidMovesForPiece(startRow, startCol);
@@ -562,7 +562,7 @@ function makeMove(startRow, startCol, endRow, endCol, promotionPieceType = null)
 
     if (!moveDetails) {
          console.warn("Invalid move attempt: Move not found in legal moves.", {startRow, startCol, endRow, endCol, piece: pieceToMove.type});
-        return { success: false, move: null, capturedPiece: null, moveNotation: "", specialMoves: {} }; // <-- Added move: null
+        return { success: false, move: null, capturedPiece: null, moveNotation: "", specialMoves: {} }; // <-- Includes move: null
     }
 
      const promotionRank = currentPlayer === COLORS.WHITE ? 0 : 7;
@@ -624,12 +624,14 @@ function makeMove(startRow, startCol, endRow, endCol, promotionPieceType = null)
         }
     }
 
+    // Update promotion type *within* the specialMovesResult
     if (moveDetails.promotion || promotionPieceType) {
          const finalPromotionType = promotionPieceType || moveDetails.promotion;
          boardState[endRow][endCol].type = finalPromotionType;
-         specialMovesResult.promotion = finalPromotionType;
+         specialMovesResult.promotion = finalPromotionType; // Ensure this is set
          console.log("Pawn promoted to:", finalPromotionType);
     }
+
 
     if (moveDetails.isDoublePawnPush) {
         enPassantTargetSquare = { row: (startRow + endRow) / 2, col: startCol };
@@ -657,7 +659,10 @@ function makeMove(startRow, startCol, endRow, endCol, promotionPieceType = null)
          }
     }
 
+    // Switch Player Turn FIRST
+    const previousPlayer = currentPlayer; // Store who made the move
     currentPlayer = (currentPlayer === COLORS.WHITE) ? COLORS.BLACK : COLORS.WHITE;
+    // Update status AFTER switching player
     updateGameStatus();
 
     const moveNotation = generateAlgebraicNotation(
@@ -670,18 +675,21 @@ function makeMove(startRow, startCol, endRow, endCol, promotionPieceType = null)
     console.log(`Move executed: ${moveNotation}. Turn: ${currentPlayer}. Check: ${gameStatus.isCheck}`);
 
     // --- FIX: Include move details in the return object ---
+    // Ensure promotion type used here matches the one applied to the board state
+    const actualPromotionType = specialMovesResult.promotion || null;
     const moveDataForReturn = {
         startRow: startRow,
         startCol: startCol,
         endRow: endRow,
         endCol: endCol,
-        piece: pieceToMove, // Include piece info
-        promotion: specialMovesResult.promotion // Include promotion result
+        piece: { type: pieceToMove.type, color: pieceToMove.color }, // Use original piece type before potential promotion for notation context maybe? Or final type? Let's use final type.
+        // piece: { type: boardState[endRow][endCol].type, color: boardState[endRow][endCol].color }, // Use final piece type
+        promotion: actualPromotionType // Pass the actual promotion result
     };
 
     return {
         success: true,
-        move: moveDataForReturn, // <-- ADDED THIS NESTED OBJECT
+        move: moveDataForReturn, // <-- CORRECTED PART
         capturedPiece: capturedPiece,
         moveNotation: moveNotation,
         specialMoves: specialMovesResult,
@@ -715,24 +723,25 @@ function generateAlgebraicNotation(piece, startRow, startCol, endRow, endCol, ca
     const ranks = "87654321";
 
     let notation = "";
-    const pieceSymbol = pieceSymbols[piece.type];
+    // Use the original piece type for the main symbol, UNLESS it's a pawn capture
+    const pieceSymbol = (piece.type === PIECE_TYPES.PAWN && !capturedPiece) ? "" : pieceSymbols[piece.type];
 
-    if (piece.type !== PIECE_TYPES.PAWN) {
+    if (piece.type === PIECE_TYPES.PAWN && capturedPiece) {
+         notation += files[startCol]; // Add starting file for pawn captures
+    } else if (piece.type !== PIECE_TYPES.PAWN) {
         notation += pieceSymbol;
         // TODO: Add disambiguation logic here if necessary
     }
 
+
     if (capturedPiece) {
-        if (piece.type === PIECE_TYPES.PAWN) {
-            notation += files[startCol];
-        }
         notation += "x";
     }
 
     notation += files[endCol] + ranks[endRow];
 
     if (promotionType) {
-        // Use the actual promoted type's symbol, which might be different from the initial piece variable
+        // Get symbol for the *promoted* piece type
         const promotedSymbol = pieceSymbols[promotionType];
         notation += "=" + promotedSymbol.toUpperCase();
     }
