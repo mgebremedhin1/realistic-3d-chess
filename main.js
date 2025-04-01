@@ -297,6 +297,7 @@ function triggerAIMove() {
         }
 
         // Make the move in the logic
+        // Ensure promotion type from aiMove object is passed if it exists
         const aiMoveResult = ChessLogic.makeMove(aiMove.startRow, aiMove.startCol, aiMove.endRow, aiMove.endCol, aiMove.promotion);
 
         if (aiMoveResult.success) {
@@ -329,4 +330,3 @@ function onCanvasMouseUp(event) { /* ... placeholder ... */ }
 
 // --- Start the Application ---
 document.addEventListener('DOMContentLoaded', initApp);
-```
