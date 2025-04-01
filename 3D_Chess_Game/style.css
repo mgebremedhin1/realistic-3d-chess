@@ -1,0 +1,273 @@
+/* General Styling */
+body {
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #282c34; /* Dark background */
+    color: #f1f1f1; /* Light text */
+    overflow: hidden; /* Prevent scrollbars from canvas */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+/* Container for the 3D canvas */
+#scene-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1; /* Behind UI */
+}
+
+/* UI Overlay Styling */
+#ui-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: grid; /* Use grid for layout */
+    grid-template-columns: 250px 1fr 250px; /* Left info, Center (empty), Right log/controls */
+    grid-template-rows: 1fr auto; /* Main content, Bottom controls row (if needed) */
+    gap: 20px;
+    padding: 20px;
+    box-sizing: border-box;
+    pointer-events: none; /* Allow clicks to pass through to the canvas */
+    z-index: 2; /* Above canvas */
+    background: linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.0) 20%),
+                linear-gradient(to top, rgba(0,0,0,0.3), rgba(0,0,0,0.0) 20%); /* Subtle top/bottom fade */
+}
+
+/* Allow interaction with UI elements */
+#ui-overlay > * {
+    pointer-events: auto;
+}
+
+/* Game Info Panel (Left) */
+#game-info {
+    grid-column: 1 / 2;
+    grid-row: 1 / 2;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    background-color: rgba(40, 44, 52, 0.8); /* Semi-transparent dark */
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    overflow-y: auto; /* Scroll if content overflows */
+    max-height: calc(100vh - 40px); /* Limit height */
+}
+
+#status-panel h2 {
+    margin: 0 0 10px 0;
+    font-size: 1.4em;
+    color: #61dafb; /* Accent color */
+    border-bottom: 1px solid #444;
+    padding-bottom: 5px;
+}
+
+#turn-indicator { /* Style the span specifically if needed */
+    font-weight: bold;
+}
+
+#game-status {
+    font-weight: bold;
+    color: #ffcc00; /* Yellow for status messages */
+    min-height: 1.2em; /* Reserve space */
+}
+
+.captured-pieces h3 {
+    margin: 10px 0 5px 0;
+    font-size: 1em;
+    color: #ccc;
+}
+
+.captured-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    min-height: 30px; /* Reserve space */
+    /* Use larger font size for Unicode symbols */
+    font-size: 1.5em;
+    line-height: 1; /* Adjust line height for better spacing */
+}
+
+.captured-list span {
+     padding: 0 2px; /* Add slight padding around symbols */
+     cursor: default; /* Indicate non-interactive */
+}
+
+
+/* Controls and Log Panel (Right) */
+#controls-log {
+    grid-column: 3 / 4;
+    grid-row: 1 / 2;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    background-color: rgba(40, 44, 52, 0.8);
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    overflow: hidden; /* Prevent parent scroll */
+    max-height: calc(100vh - 40px); /* Limit height */
+}
+
+#move-history {
+    flex-grow: 1; /* Take available space */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Hide internal overflow */
+}
+
+#move-history h3 {
+    margin: 0 0 10px 0;
+    font-size: 1.2em;
+    color: #ccc;
+    border-bottom: 1px solid #444;
+    padding-bottom: 5px;
+    flex-shrink: 0; /* Prevent shrinking */
+}
+
+#move-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    overflow-y: auto; /* Enable scrolling for the list */
+    flex-grow: 1; /* Allow list to grow */
+    font-size: 0.9em;
+    scrollbar-width: thin; /* Firefox */
+    scrollbar-color: #666 #333; /* Firefox */
+}
+
+/* Webkit scrollbar styling */
+#move-list::-webkit-scrollbar {
+    width: 8px;
+}
+#move-list::-webkit-scrollbar-track {
+    background: #333;
+    border-radius: 4px;
+}
+#move-list::-webkit-scrollbar-thumb {
+    background-color: #666;
+    border-radius: 4px;
+    border: 2px solid #333;
+}
+
+#move-list li {
+    padding: 4px 8px; /* Slightly more padding */
+    border-bottom: 1px solid #383c44;
+    line-height: 1.4; /* Improve readability */
+}
+#move-list li:nth-child(even) {
+    background-color: rgba(255, 255, 255, 0.03);
+}
+#move-list li:last-child {
+    border-bottom: none;
+}
+
+#move-list .move-number {
+    display: inline-block;
+    width: 2em; /* Allocate space for move number */
+    font-weight: bold;
+    color: #aaa;
+    margin-right: 5px;
+}
+
+
+#game-controls {
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0; /* Prevent shrinking */
+    padding-top: 10px;
+    border-top: 1px solid #444;
+}
+
+#game-controls button {
+    padding: 10px 15px;
+    font-size: 1em;
+    background-color: #61dafb;
+    color: #282c34;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+    font-weight: bold;
+}
+
+#game-controls button:hover {
+    background-color: #7adedd;
+}
+
+#game-controls button:active {
+    transform: scale(0.98);
+}
+
+#game-controls button:disabled {
+    background-color: #555;
+    color: #999;
+    cursor: not-allowed;
+}
+
+/* Optional Timer Styling */
+#timers {
+    margin-top: 10px;
+    font-size: 0.9em;
+    color: #aaa;
+}
+
+/* Responsive Adjustments (Example) */
+@media (max-width: 768px) {
+    #ui-overlay {
+        grid-template-columns: 1fr; /* Stack columns */
+        grid-template-rows: auto auto 1fr; /* Info, Controls, Log */
+        gap: 10px;
+        padding: 10px;
+    }
+    #game-info {
+        grid-column: 1 / 2;
+        grid-row: 1 / 2;
+        max-height: none; /* Allow natural height */
+    }
+    #controls-log {
+        grid-column: 1 / 2;
+        grid-row: 2 / 3; /* Move below info */
+        flex-direction: row; /* Controls beside log */
+        max-height: none;
+    }
+    #move-history {
+       flex-grow: 1;
+    }
+    #game-controls {
+       flex-direction: column; /* Stack buttons */
+       padding-top: 0;
+       border-top: none;
+       border-left: 1px solid #444;
+       padding-left: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+     #controls-log {
+        flex-direction: column; /* Stack controls and log again */
+     }
+     #game-controls {
+       flex-direction: row; /* Buttons side-by-side */
+       border-left: none;
+       padding-left: 0;
+       border-top: 1px solid #444;
+       padding-top: 10px;
+    }
+    #status-panel h2 {
+        font-size: 1.2em;
+    }
+    #game-controls button {
+        padding: 8px 10px;
+        font-size: 0.9em;
+    }
+     .captured-list {
+        font-size: 1.3em; /* Slightly smaller symbols on small screens */
+    }
+}
