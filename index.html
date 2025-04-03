@@ -17,12 +17,10 @@
                 <p id="game-status"></p> </div>
             <div class="captured-pieces">
                 <h3>White Captured:</h3>
-                <div id="captured-white" class="captured-list"></div>
-            </div>
+                <div id="captured-white" class="captured-list"></div> </div>
             <div class="captured-pieces">
                 <h3>Black Captured:</h3>
-                <div id="captured-black" class="captured-list"></div>
-            </div>
+                <div id="captured-black" class="captured-list"></div> </div>
         </div>
 
         <div id="controls-log">
@@ -40,9 +38,12 @@
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.163.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.163.0/examples/jsm/",
-                "three/addons/controls/OrbitControls.js": "https://unpkg.com/three@0.163.0/examples/jsm/controls/OrbitControls.js"
+                // *** THIS LINE IS CHANGED ***
+                // Load main Three.js library from Cloudflare CDN instead of unpkg
+                "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.163.0/three.module.min.js",
+                // Addons are still loaded from unpkg (can be changed later if needed)
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/",
+                "three/addons/controls/OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/controls/OrbitControls.js"
             }
         }
     </script>
