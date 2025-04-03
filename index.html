@@ -36,16 +36,13 @@
     </div>
 
     <script type="importmap">
-        {
-            "imports": {
-                // *** THIS LINE IS CHANGED ***
-                // Load main Three.js library from Cloudflare CDN instead of unpkg
-                "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.163.0/three.module.min.js",
-                // Addons are still loaded from unpkg (can be changed later if needed)
-                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/",
-                "three/addons/controls/OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/controls/OrbitControls.js"
-            }
+    {
+        "imports": {
+            "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.163.0/three.module.min.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/",
+            "three/addons/controls/OrbitControls.js": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/controls/OrbitControls.js"
         }
+    }
     </script>
     <script type="module" src="main.js"></script>
 </body>
