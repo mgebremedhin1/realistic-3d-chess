@@ -23,251 +23,73 @@ let pieceMeshReferences = { pawn: null, rook: null, knight: null, bishop: null, 
 let modelsLoaded = false;
 
 // --- Function to Load 3D Models ---
-/**
- * Loads the GLB model file asynchronously and stores references to named piece meshes.
- * @param {function} onLoadedCallback - Function to call once models are loaded and processed.
- */
 function loadModels(onLoadedCallback) {
     const loader = new GLTFLoader();
     console.log(`Attempting to load model from: ${CHESS_SET_MODEL_PATH}`);
-
-    loader.load(
-        CHESS_SET_MODEL_PATH,
-        function (gltf) {
+    loader.load( CHESS_SET_MODEL_PATH, function (gltf) {
             console.log("GLTF model loaded successfully.");
             const loadedScene = gltf.scene;
-
-            loadedScene.traverse((child) => {
-                if (child.isMesh) {
-                    child.castShadow = true;
-                    child.receiveShadow = true;
-                }
-            });
-
+            loadedScene.traverse((child) => { if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; } });
             console.log("--- Finding individual piece meshes by name ---");
-            const nameMap = {
-                pawn: 'Pawn_0', rook: 'Rook_0', knight: 'Knight_0',
-                bishop: 'Bishop_0', queen: 'Queen_0', king: 'King_0'
-            };
+            const nameMap = { pawn: 'Pawn_0', rook: 'Rook_0', knight: 'Knight_0', bishop: 'Bishop_0', queen: 'Queen_0', king: 'King_0' };
             let allFound = true;
             for (const type in nameMap) {
                 const meshName = nameMap[type];
                 const foundMesh = loadedScene.getObjectByName(meshName);
-                if (foundMesh && foundMesh.isMesh) {
-                    pieceMeshReferences[type] = foundMesh;
-                    console.log(`Stored reference for '${type}' using mesh named '${meshName}'`);
-                } else {
-                    console.error(`Could not find mesh named '${meshName}' for piece type '${type}'!`);
-                    allFound = false;
-                }
+                if (foundMesh && foundMesh.isMesh) { pieceMeshReferences[type] = foundMesh; console.log(`Stored reference for '${type}' using mesh named '${meshName}'`); }
+                else { console.error(`Could not find mesh named '${meshName}' for piece type '${type}'!`); allFound = false; }
             }
-
-            if (allFound) {
-                console.log("--- Successfully stored references for all piece types ---");
-                modelsLoaded = true;
-            } else {
-                console.error("--- Failed to find all required piece meshes! Check console errors. ---");
-                modelsLoaded = false;
-            }
-
+            if (allFound) { console.log("--- Successfully stored references for all piece types ---"); modelsLoaded = true; }
+            else { console.error("--- Failed to find all required piece meshes! Check console errors. ---"); modelsLoaded = false; }
             console.log("Model processing complete.");
             if (onLoadedCallback) { onLoadedCallback(); }
-        },
-        undefined,
-        function (error) {
-            console.error('An error happened during GLTF loading:', error);
-            modelsLoaded = false;
-            if (onLoadedCallback) { onLoadedCallback(); }
+        }, undefined, function (error) {
+            console.error('An error happened during GLTF loading:', error); modelsLoaded = false; if (onLoadedCallback) { onLoadedCallback(); }
         }
     );
 }
 
-
 // --- Public Functions ---
-
-/**
- * Initializes the entire Three.js scene.
- * @param {HTMLElement} container - The DOM element to attach the canvas to.
- * @param {function} onReadyCallback - Function to call when scene AND models are ready.
- */
-function init(container, onReadyCallback) {
-    // Scene, Camera, Renderer, Lights, Controls, Groups setup... (Same as before)
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x282c34);
-    const aspect = window.innerWidth / window.innerHeight;
-    camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
-    camera.position.set(0, SQUARE_SIZE * BOARD_SIZE * 0.6, SQUARE_SIZE * BOARD_SIZE * 0.6);
-    camera.lookAt(0, 0, 0);
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    container.appendChild(renderer.domElement);
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-    scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    directionalLight.position.set(15, 30, 20);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.width = 2048; directionalLight.shadow.mapSize.height = 2048;
-    const shadowCamSize = SQUARE_SIZE * BOARD_SIZE * 0.6;
-    directionalLight.shadow.camera.near = 0.5; directionalLight.shadow.camera.far = 100;
-    directionalLight.shadow.camera.left = -shadowCamSize; directionalLight.shadow.camera.right = shadowCamSize;
-    directionalLight.shadow.camera.top = shadowCamSize; directionalLight.shadow.camera.bottom = -shadowCamSize;
-    directionalLight.shadow.bias = -0.001;
-    scene.add(directionalLight);
-    controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 0, 0); controls.enableDamping = true; controls.dampingFactor = 0.05;
-    controls.screenSpacePanning = false; controls.minDistance = SQUARE_SIZE * 1.5; controls.maxDistance = SQUARE_SIZE * BOARD_SIZE * 1.5;
-    controls.maxPolarAngle = Math.PI / 2.05;
-    boardGroup = new THREE.Group(); pieceGroup = new THREE.Group(); highlightGroup = new THREE.Group();
-    scene.add(boardGroup); scene.add(pieceGroup); scene.add(highlightGroup);
-    createBoard();
-    window.addEventListener('resize', onWindowResize, false);
-    animate();
-    console.log("Three.js scene initialized. Starting model load...");
-    loadModels(() => {
-        console.log("Model loading complete callback received.");
-        if (onReadyCallback) { onReadyCallback(); }
-    });
+function init(container, onReadyCallback) { /* ... (same as before) ... */
+    scene = new THREE.Scene(); scene.background = new THREE.Color(0x282c34);
+    const aspect = window.innerWidth / window.innerHeight; camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
+    camera.position.set(0, SQUARE_SIZE * BOARD_SIZE * 0.6, SQUARE_SIZE * BOARD_SIZE * 0.6); camera.lookAt(0, 0, 0);
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); renderer.setSize(window.innerWidth, window.innerHeight); renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; container.appendChild(renderer.domElement);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2); directionalLight.position.set(15, 30, 20); directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 2048; directionalLight.shadow.mapSize.height = 2048; const shadowCamSize = SQUARE_SIZE * BOARD_SIZE * 0.6;
+    directionalLight.shadow.camera.near = 0.5; directionalLight.shadow.camera.far = 100; directionalLight.shadow.camera.left = -shadowCamSize; directionalLight.shadow.camera.right = shadowCamSize; directionalLight.shadow.camera.top = shadowCamSize; directionalLight.shadow.camera.bottom = -shadowCamSize; directionalLight.shadow.bias = -0.001; scene.add(directionalLight);
+    controls = new OrbitControls(camera, renderer.domElement); controls.target.set(0, 0, 0); controls.enableDamping = true; controls.dampingFactor = 0.05; controls.screenSpacePanning = false; controls.minDistance = SQUARE_SIZE * 1.5; controls.maxDistance = SQUARE_SIZE * BOARD_SIZE * 1.5; controls.maxPolarAngle = Math.PI / 2.05;
+    boardGroup = new THREE.Group(); pieceGroup = new THREE.Group(); highlightGroup = new THREE.Group(); scene.add(boardGroup); scene.add(pieceGroup); scene.add(highlightGroup); createBoard(); window.addEventListener('resize', onWindowResize, false); animate(); console.log("Three.js scene initialized. Starting model load..."); loadModels(() => { console.log("Model loading complete callback received."); if (onReadyCallback) { onReadyCallback(); } });
 }
-
-/** Creates the chessboard geometry. (No changes) */
 function createBoard() { /* ... (same as before) ... */
-    const boardBaseGeometry = new THREE.BoxGeometry(BOARD_SIZE * SQUARE_SIZE, BOARD_THICKNESS, BOARD_SIZE * SQUARE_SIZE);
-    const boardBaseMaterial = new THREE.MeshStandardMaterial({ color: 0x5c3e31, roughness: 0.8 });
-    const boardBaseMesh = new THREE.Mesh(boardBaseGeometry, boardBaseMaterial);
-    boardBaseMesh.position.y = -BOARD_THICKNESS / 2; boardBaseMesh.receiveShadow = true; boardGroup.add(boardBaseMesh);
-    const squareGeometry = new THREE.PlaneGeometry(SQUARE_SIZE, SQUARE_SIZE);
-    for (let row = 0; row < BOARD_SIZE; row++) {
-        for (let col = 0; col < BOARD_SIZE; col++) {
-            const isLightSquare = (row + col) % 2 === 0;
-            const squareMaterial = isLightSquare ? lightSquareMaterial : darkSquareMaterial;
-            const squareMesh = new THREE.Mesh(squareGeometry, squareMaterial);
-            squareMesh.position.x = (col - BOARD_SIZE / 2 + 0.5) * SQUARE_SIZE; squareMesh.position.z = (row - BOARD_SIZE / 2 + 0.5) * SQUARE_SIZE;
-            squareMesh.position.y = 0.01; squareMesh.rotation.x = -Math.PI / 2; squareMesh.receiveShadow = true;
-            squareMesh.userData = { type: 'square', row: row, col: col }; boardGroup.add(squareMesh);
-        }
-    }
-    console.log("Chessboard created.");
+    const boardBaseGeometry = new THREE.BoxGeometry(BOARD_SIZE * SQUARE_SIZE, BOARD_THICKNESS, BOARD_SIZE * SQUARE_SIZE); const boardBaseMaterial = new THREE.MeshStandardMaterial({ color: 0x5c3e31, roughness: 0.8 }); const boardBaseMesh = new THREE.Mesh(boardBaseGeometry, boardBaseMaterial); boardBaseMesh.position.y = -BOARD_THICKNESS / 2; boardBaseMesh.receiveShadow = true; boardGroup.add(boardBaseMesh); const squareGeometry = new THREE.PlaneGeometry(SQUARE_SIZE, SQUARE_SIZE); for (let row = 0; row < BOARD_SIZE; row++) { for (let col = 0; col < BOARD_SIZE; col++) { const isLightSquare = (row + col) % 2 === 0; const squareMaterial = isLightSquare ? lightSquareMaterial : darkSquareMaterial; const squareMesh = new THREE.Mesh(squareGeometry, squareMaterial); squareMesh.position.x = (col - BOARD_SIZE / 2 + 0.5) * SQUARE_SIZE; squareMesh.position.z = (row - BOARD_SIZE / 2 + 0.5) * SQUARE_SIZE; squareMesh.position.y = 0.01; squareMesh.rotation.x = -Math.PI / 2; squareMesh.receiveShadow = true; squareMesh.userData = { type: 'square', row: row, col: col }; boardGroup.add(squareMesh); } } console.log("Chessboard created.");
 }
-
-
-// ==============================================================
-// == PIECE CREATION - FIX INTERACTION & ROTATION ==
-// ==============================================================
-/**
- * Creates a chess piece by finding the correct template mesh from the
- * pre-loaded references, cloning it, scaling it, rotating it, and positioning it.
- * @param {string} type - Piece type ('pawn', 'rook', 'knight', 'bishop', 'queen', 'king').
- * @param {string} color - 'white' or 'black'.
- * @returns {THREE.Group | null} A group containing the piece mesh, or null if loading failed or mesh not found.
- */
-function createPlaceholderPiece(type, color) {
-    if (!modelsLoaded) {
-        console.error(`Attempted to create piece type '${type}' before models finished loading or failed.`);
-        const fallbackGeo = new THREE.BoxGeometry(SQUARE_SIZE * 0.2, SQUARE_SIZE * 0.2, SQUARE_SIZE * 0.2); const fallbackMesh = new THREE.Mesh(fallbackGeo, color === 'white' ? whitePieceMaterial : blackPieceMaterial);
-        const fallbackGroup = new THREE.Group(); fallbackGroup.add(fallbackMesh); fallbackGroup.userData = { type: 'piece', pieceType: 'fallback', color: color }; return fallbackGroup;
-    }
-    const templateMesh = pieceMeshReferences[type.toLowerCase()];
-    if (!templateMesh) {
-        console.error(`No mesh reference found for piece type '${type}'!`);
-        const fallbackGeo = new THREE.BoxGeometry(SQUARE_SIZE * 0.3, SQUARE_SIZE * 0.7, SQUARE_SIZE * 0.3); const fallbackMesh = new THREE.Mesh(fallbackGeo, color === 'white' ? whitePieceMaterial : blackPieceMaterial);
-        const fallbackGroup = new THREE.Group(); fallbackGroup.add(fallbackMesh); fallbackGroup.userData = { type: 'piece', pieceType: 'fallback_missing', color: color }; return fallbackGroup;
-    }
-
-    const pieceMesh = templateMesh.clone();
-    pieceMesh.material = color === 'white' ? whitePieceMaterial : blackPieceMaterial;
-    pieceMesh.castShadow = true;
-    pieceMesh.receiveShadow = true;
-
-    // --- Auto Scaling Logic ---
-    const desiredHeightApprox = SQUARE_SIZE * 0.9;
-    const box = new THREE.Box3().setFromObject(pieceMesh);
-    const size = box.getSize(new THREE.Vector3());
-    let scaleFactor = 1.0;
-    if (size.y > 0.001) { scaleFactor = desiredHeightApprox / size.y; }
-    else { console.warn(`Mesh for ${type} has zero height, using default scale.`); }
-    pieceMesh.scale.set(scaleFactor, scaleFactor, scaleFactor);
-
-    // --- Auto Positioning Logic ---
-    const scaledBox = new THREE.Box3().setFromObject(pieceMesh);
-    pieceMesh.position.y = -scaledBox.min.y;
-
-    // --- Create Group & Add Mesh ---
-    const pieceGroupContainer = new THREE.Group();
-    pieceGroupContainer.add(pieceMesh);
-
-    // *** NEW: Apply Rotation based on color ***
-    // Rotate white pieces 180 degrees (PI radians) around the Y axis.
-    // Adjust this if black needs rotating instead, depending on the model's default orientation.
-    if (color === 'white') {
-        pieceGroupContainer.rotation.y = Math.PI; // Rotate the whole group
-    }
-
-    // --- Add Metadata to the GROUP ONLY ---
-    // Store interaction data only on the parent group, not the mesh itself,
-    // to simplify identification in getIntersects.
-    pieceGroupContainer.userData = { type: 'piece', pieceType: type, color: color };
-    // *** REMOVED: pieceMesh.userData = { ... }; ***
-
-    return pieceGroupContainer; // Return the GROUP
+function createPlaceholderPiece(type, color) { /* ... (same as before, including rotation fix) ... */
+    if (!modelsLoaded) { console.error(`Attempted to create piece type '${type}' before models finished loading or failed.`); const fallbackGeo = new THREE.BoxGeometry(SQUARE_SIZE * 0.2, SQUARE_SIZE * 0.2, SQUARE_SIZE * 0.2); const fallbackMesh = new THREE.Mesh(fallbackGeo, color === 'white' ? whitePieceMaterial : blackPieceMaterial); const fallbackGroup = new THREE.Group(); fallbackGroup.add(fallbackMesh); fallbackGroup.userData = { type: 'piece', pieceType: 'fallback', color: color }; return fallbackGroup; }
+    const templateMesh = pieceMeshReferences[type.toLowerCase()]; if (!templateMesh) { console.error(`No mesh reference found for piece type '${type}'!`); const fallbackGeo = new THREE.BoxGeometry(SQUARE_SIZE * 0.3, SQUARE_SIZE * 0.7, SQUARE_SIZE * 0.3); const fallbackMesh = new THREE.Mesh(fallbackGeo, color === 'white' ? whitePieceMaterial : blackPieceMaterial); const fallbackGroup = new THREE.Group(); fallbackGroup.add(fallbackMesh); fallbackGroup.userData = { type: 'piece', pieceType: 'fallback_missing', color: color }; return fallbackGroup; }
+    const pieceMesh = templateMesh.clone(); pieceMesh.material = color === 'white' ? whitePieceMaterial : blackPieceMaterial; pieceMesh.castShadow = true; pieceMesh.receiveShadow = true;
+    const desiredHeightApprox = SQUARE_SIZE * 0.9; const box = new THREE.Box3().setFromObject(pieceMesh); const size = box.getSize(new THREE.Vector3()); let scaleFactor = 1.0; if (size.y > 0.001) { scaleFactor = desiredHeightApprox / size.y; } else { console.warn(`Mesh for ${type} has zero height, using default scale.`); } pieceMesh.scale.set(scaleFactor, scaleFactor, scaleFactor);
+    const scaledBox = new THREE.Box3().setFromObject(pieceMesh); pieceMesh.position.y = -scaledBox.min.y;
+    const pieceGroupContainer = new THREE.Group(); pieceGroupContainer.add(pieceMesh);
+    if (color === 'white') { pieceGroupContainer.rotation.y = Math.PI; }
+    pieceGroupContainer.userData = { type: 'piece', pieceType: type, color: color }; // UserData ONLY on group
+    return pieceGroupContainer;
 }
-// ==============================================================
-// == END OF UPDATED PIECE FUNCTION ==
-// ==============================================================
-
-
-/** Adds a piece to the scene. (No changes) */
-function addPieceToScene(type, color, row, col) { /* ... (same as before) ... */
-    const pieceGroupContainer = createPlaceholderPiece(type, color);
-    if (!pieceGroupContainer) { console.error(`Failed to create piece group ${type} at [${row}, ${col}]`); return null; }
-    const position = getPositionFromCoords(row, col);
-    pieceGroupContainer.position.set(position.x, 0, position.z);
-    pieceGroupContainer.userData.row = row; pieceGroupContainer.userData.col = col;
-    pieceGroup.add(pieceGroupContainer); return pieceGroupContainer;
-}
-/** Removes all piece groups. (No changes) */
-function clearPieces() { /* ... (same as before) ... */
-     while(pieceGroup.children.length > 0){ const piece = pieceGroup.children[0]; piece.traverse((child) => { if (child instanceof THREE.Mesh) { if (child.geometry) child.geometry.dispose(); } }); pieceGroup.remove(piece); }
-}
-/** Converts board coords to world position. (No changes) */
-function getPositionFromCoords(row, col) { /* ... (same as before) ... */
-     return new THREE.Vector3( (col - BOARD_SIZE / 2 + 0.5) * SQUARE_SIZE, 0, (row - BOARD_SIZE / 2 + 0.5) * SQUARE_SIZE );
-}
-/** Converts world position to board coords. (No changes) */
-function getCoordsFromPosition(position) { /* ... (same as before) ... */
-    const col = Math.floor(position.x / SQUARE_SIZE + BOARD_SIZE / 2); const row = Math.floor(position.z / SQUARE_SIZE + BOARD_SIZE / 2);
-    if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE) { return { row, col }; } return null;
-}
-/** Finds the piece group at coords. (No changes) */
-function getPieceMeshAt(row, col) { /* ... (same as before) ... */
-     for (const piece of pieceGroup.children) { if (piece.userData.row === row && piece.userData.col === col) { return piece; } } return null;
-}
-/** Moves a piece group. (No changes) */
-function movePieceMesh(pieceMeshGroup, newRow, newCol) { /* ... (same as before) ... */
-    const targetPosition = getPositionFromCoords(newRow, newCol); pieceMeshGroup.position.set(targetPosition.x, pieceMeshGroup.position.y, targetPosition.z);
-    pieceMeshGroup.userData.row = newRow; pieceMeshGroup.userData.col = newCol;
-}
-/** Removes a piece group. (No changes) */
-function removePieceMesh(pieceMeshGroup) { /* ... (same as before) ... */
-      if (pieceMeshGroup) { pieceMeshGroup.traverse((child) => { if (child instanceof THREE.Mesh) { if (child.geometry) child.geometry.dispose(); } }); pieceGroup.remove(pieceMeshGroup); }
-}
-/** Shows highlights. (No changes) */
-function showHighlights(squares) { /* ... (same as before) ... */
-    clearHighlights(); const highlightGeometry = new THREE.PlaneGeometry(SQUARE_SIZE * 0.9, SQUARE_SIZE * 0.9);
-    squares.forEach(sq => { const highlightMesh = new THREE.Mesh(highlightGeometry, highlightMaterial); const pos = getPositionFromCoords(sq.row, sq.col);
-        highlightMesh.position.set(pos.x, 0.02, pos.z); highlightMesh.rotation.x = -Math.PI / 2;
-        highlightMesh.userData = { type: 'highlight', row: sq.row, col: sq.col }; highlightGroup.add(highlightMesh); });
-}
-/** Clears highlights. (No changes) */
+function addPieceToScene(type, color, row, col) { /* ... (same as before) ... */ const pieceGroupContainer = createPlaceholderPiece(type, color); if (!pieceGroupContainer) { console.error(`Failed to create piece group ${type} at [${row}, ${col}]`); return null; } const position = getPositionFromCoords(row, col); pieceGroupContainer.position.set(position.x, 0, position.z); pieceGroupContainer.userData.row = row; pieceGroupContainer.userData.col = col; pieceGroup.add(pieceGroupContainer); return pieceGroupContainer; }
+function clearPieces() { /* ... (same as before) ... */ while(pieceGroup.children.length > 0){ const piece = pieceGroup.children[0]; piece.traverse((child) => { if (child instanceof THREE.Mesh) { if (child.geometry) child.geometry.dispose(); } }); pieceGroup.remove(piece); } }
+function getPositionFromCoords(row, col) { /* ... (same as before) ... */ return new THREE.Vector3( (col - BOARD_SIZE / 2 + 0.5) * SQUARE_SIZE, 0, (row - BOARD_SIZE / 2 + 0.5) * SQUARE_SIZE ); }
+function getCoordsFromPosition(position) { /* ... (same as before) ... */ const col = Math.floor(position.x / SQUARE_SIZE + BOARD_SIZE / 2); const row = Math.floor(position.z / SQUARE_SIZE + BOARD_SIZE / 2); if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE) { return { row, col }; } return null; }
+function getPieceMeshAt(row, col) { /* ... (same as before) ... */ for (const piece of pieceGroup.children) { if (piece.userData.row === row && piece.userData.col === col) { return piece; } } return null; }
+function movePieceMesh(pieceMeshGroup, newRow, newCol) { /* ... (same as before) ... */ const targetPosition = getPositionFromCoords(newRow, newCol); pieceMeshGroup.position.set(targetPosition.x, pieceMeshGroup.position.y, targetPosition.z); pieceMeshGroup.userData.row = newRow; pieceMeshGroup.userData.col = newCol; }
+function removePieceMesh(pieceMeshGroup) { /* ... (same as before) ... */ if (pieceMeshGroup) { pieceMeshGroup.traverse((child) => { if (child instanceof THREE.Mesh) { if (child.geometry) child.geometry.dispose(); } }); pieceGroup.remove(pieceMeshGroup); } }
+function showHighlights(squares) { /* ... (same as before) ... */ clearHighlights(); const highlightGeometry = new THREE.PlaneGeometry(SQUARE_SIZE * 0.9, SQUARE_SIZE * 0.9); squares.forEach(sq => { const highlightMesh = new THREE.Mesh(highlightGeometry, highlightMaterial); const pos = getPositionFromCoords(sq.row, sq.col); highlightMesh.position.set(pos.x, 0.02, pos.z); highlightMesh.rotation.x = -Math.PI / 2; highlightMesh.userData = { type: 'highlight', row: sq.row, col: sq.col }; highlightGroup.add(highlightMesh); }); }
 function clearHighlights() { /* ... (same as before) ... */ highlightGroup.clear(); }
-/** Animation loop. (No changes) */
 function animate() { /* ... (same as before) ... */ requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
-/** Window resize handler. (No changes) */
 function onWindowResize() { /* ... (same as before) ... */ camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
 
-/** Raycasting - Finds intersected objects. (Minor change in traverse logic) */
+/** Raycasting - Finds intersected objects. ADDED LOGGING */
 function getIntersects(event) {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -275,25 +97,37 @@ function getIntersects(event) {
     const objectsToIntersect = [...pieceGroup.children, ...boardGroup.children, ...highlightGroup.children];
     const intersects = raycaster.intersectObjects(objectsToIntersect, true); // recursive: true
 
+    // *** NEW: Log raw intersections ***
+    // console.log("Raw intersects:", intersects);
+
     const relevantIntersects = [];
     for (const intersect of intersects) {
-        let obj = intersect.object;
+        let obj = intersect.object; // The actual mesh hit
+        // *** NEW: Log the initially hit object ***
+        // console.log("Ray hit:", obj.name, obj.type, obj.userData);
+
         // Traverse up to find the object with our 'type' userData (should be the piece GROUP)
-        // Stop if we hit the scene directly or find the type
-        while (obj && (!obj.userData || !obj.userData.type) && obj.parent !== scene) {
+        let depth = 0; // Prevent infinite loops
+        while (obj && (!obj.userData || !obj.userData.type) && obj.parent !== scene && depth < 10) {
+            // console.log("Traversing up from:", obj.name); // Optional verbose log
             obj = obj.parent;
+            depth++;
         }
+
+        // *** NEW: Log the final object identified after traversal ***
+        // console.log("Identified object after traversal:", obj ? obj.name : 'null', obj ? obj.type : 'null', obj ? obj.userData : '{}');
+
         // Only add if we found an object with the type property (piece, square, or highlight)
         // and haven't added this specific object yet
         if (obj && obj.userData.type && !relevantIntersects.some(ri => ri.object === obj)) {
-             relevantIntersects.push({ ...intersect, object: obj });
-             // For chess, we usually only care about the very first thing hit.
-             // If a highlight is exactly on top of a piece, this might need adjustment,
-             // but for now, finding the first relevant object (piece group or square) is likely sufficient.
-             // break; // Consider adding break if only the top-most matters.
+             // *** NEW: Log the object being added as relevant ***
+             console.log(`Adding relevant object: Name='${obj.name}', Type='${obj.userData.type}', pieceType='${obj.userData.pieceType}', Coords=[${obj.userData.row}, ${obj.userData.col}]`);
+             relevantIntersects.push({ ...intersect, object: obj }); // Associate intersection with the group/square/highlight
         }
     }
     relevantIntersects.sort((a, b) => a.distance - b.distance); // Closest first
+    // *** NEW: Log the final sorted relevant intersects ***
+    // console.log("Final relevant intersects:", relevantIntersects);
     return relevantIntersects;
 }
 
