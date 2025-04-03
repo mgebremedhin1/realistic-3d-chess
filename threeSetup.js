@@ -18,31 +18,27 @@ const highlightMaterial = new THREE.MeshStandardMaterial({ color: HIGHLIGHT_COLO
 
 // --- Scene Variables ---
 let scene, camera, renderer, controls;
-let boardGroup, pieceGroup, highlightGroup;
+let boardGroup, pieceGroup, highlightGroup; // pieceGroup is defined here
 let pieceMeshReferences = { pawn: null, rook: null, knight: null, bishop: null, queen: null, king: null };
 let modelsLoaded = false;
 
 // --- Function to Load 3D Models ---
-function loadModels(onLoadedCallback) {
-    const loader = new GLTFLoader();
-    console.log(`Attempting to load model from: ${CHESS_SET_MODEL_PATH}`);
+function loadModels(onLoadedCallback) { /* ... (same as before) ... */
+    const loader = new GLTFLoader(); console.log(`Attempting to load model from: ${CHESS_SET_MODEL_PATH}`);
     loader.load( CHESS_SET_MODEL_PATH, function (gltf) {
-            console.log("GLTF model loaded successfully.");
-            const loadedScene = gltf.scene;
+            console.log("GLTF model loaded successfully."); const loadedScene = gltf.scene;
             loadedScene.traverse((child) => { if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; } });
             console.log("--- Finding individual piece meshes by name ---");
             const nameMap = { pawn: 'Pawn_0', rook: 'Rook_0', knight: 'Knight_0', bishop: 'Bishop_0', queen: 'Queen_0', king: 'King_0' };
             let allFound = true;
             for (const type in nameMap) {
-                const meshName = nameMap[type];
-                const foundMesh = loadedScene.getObjectByName(meshName);
+                const meshName = nameMap[type]; const foundMesh = loadedScene.getObjectByName(meshName);
                 if (foundMesh && foundMesh.isMesh) { pieceMeshReferences[type] = foundMesh; console.log(`Stored reference for '${type}' using mesh named '${meshName}'`); }
                 else { console.error(`Could not find mesh named '${meshName}' for piece type '${type}'!`); allFound = false; }
             }
             if (allFound) { console.log("--- Successfully stored references for all piece types ---"); modelsLoaded = true; }
             else { console.error("--- Failed to find all required piece meshes! Check console errors. ---"); modelsLoaded = false; }
-            console.log("Model processing complete.");
-            if (onLoadedCallback) { onLoadedCallback(); }
+            console.log("Model processing complete."); if (onLoadedCallback) { onLoadedCallback(); }
         }, undefined, function (error) {
             console.error('An error happened during GLTF loading:', error); modelsLoaded = false; if (onLoadedCallback) { onLoadedCallback(); }
         }
@@ -66,7 +62,7 @@ function init(container, onReadyCallback) { /* ... (same as before) ... */
 function createBoard() { /* ... (same as before) ... */
     const boardBaseGeometry = new THREE.BoxGeometry(BOARD_SIZE * SQUARE_SIZE, BOARD_THICKNESS, BOARD_SIZE * SQUARE_SIZE); const boardBaseMaterial = new THREE.MeshStandardMaterial({ color: 0x5c3e31, roughness: 0.8 }); const boardBaseMesh = new THREE.Mesh(boardBaseGeometry, boardBaseMaterial); boardBaseMesh.position.y = -BOARD_THICKNESS / 2; boardBaseMesh.receiveShadow = true; boardGroup.add(boardBaseMesh); const squareGeometry = new THREE.PlaneGeometry(SQUARE_SIZE, SQUARE_SIZE); for (let row = 0; row < BOARD_SIZE; row++) { for (let col = 0; col < BOARD_SIZE; col++) { const isLightSquare = (row + col) % 2 === 0; const squareMaterial = isLightSquare ? lightSquareMaterial : darkSquareMaterial; const squareMesh = new THREE.Mesh(squareGeometry, squareMaterial); squareMesh.position.x = (col - BOARD_SIZE / 2 + 0.5) * SQUARE_SIZE; squareMesh.position.z = (row - BOARD_SIZE / 2 + 0.5) * SQUARE_SIZE; squareMesh.position.y = 0.01; squareMesh.rotation.x = -Math.PI / 2; squareMesh.receiveShadow = true; squareMesh.userData = { type: 'square', row: row, col: col }; boardGroup.add(squareMesh); } } console.log("Chessboard created.");
 }
-function createPlaceholderPiece(type, color) { /* ... (same as before, including rotation fix and userData only on group) ... */
+function createPlaceholderPiece(type, color) { /* ... (same as before) ... */
     if (!modelsLoaded) { console.error(`Attempted to create piece type '${type}' before models finished loading or failed.`); const fallbackGeo = new THREE.BoxGeometry(SQUARE_SIZE * 0.2, SQUARE_SIZE * 0.2, SQUARE_SIZE * 0.2); const fallbackMesh = new THREE.Mesh(fallbackGeo, color === 'white' ? whitePieceMaterial : blackPieceMaterial); const fallbackGroup = new THREE.Group(); fallbackGroup.add(fallbackMesh); fallbackGroup.userData = { type: 'piece', pieceType: 'fallback', color: color }; return fallbackGroup; }
     const templateMesh = pieceMeshReferences[type.toLowerCase()]; if (!templateMesh) { console.error(`No mesh reference found for piece type '${type}'!`); const fallbackGeo = new THREE.BoxGeometry(SQUARE_SIZE * 0.3, SQUARE_SIZE * 0.7, SQUARE_SIZE * 0.3); const fallbackMesh = new THREE.Mesh(fallbackGeo, color === 'white' ? whitePieceMaterial : blackPieceMaterial); const fallbackGroup = new THREE.Group(); fallbackGroup.add(fallbackMesh); fallbackGroup.userData = { type: 'piece', pieceType: 'fallback_missing', color: color }; return fallbackGroup; }
     const pieceMesh = templateMesh.clone(); pieceMesh.material = color === 'white' ? whitePieceMaterial : blackPieceMaterial; pieceMesh.castShadow = true; pieceMesh.receiveShadow = true;
@@ -74,7 +70,7 @@ function createPlaceholderPiece(type, color) { /* ... (same as before, including
     const scaledBox = new THREE.Box3().setFromObject(pieceMesh); pieceMesh.position.y = -scaledBox.min.y;
     const pieceGroupContainer = new THREE.Group(); pieceGroupContainer.add(pieceMesh);
     if (color === 'white') { pieceGroupContainer.rotation.y = Math.PI; }
-    pieceGroupContainer.userData = { type: 'piece', pieceType: type, color: color }; // UserData ONLY on group
+    pieceGroupContainer.userData = { type: 'piece', pieceType: type, color: color };
     return pieceGroupContainer;
 }
 function addPieceToScene(type, color, row, col) { /* ... (same as before) ... */ const pieceGroupContainer = createPlaceholderPiece(type, color); if (!pieceGroupContainer) { console.error(`Failed to create piece group ${type} at [${row}, ${col}]`); return null; } const position = getPositionFromCoords(row, col); pieceGroupContainer.position.set(position.x, 0, position.z); pieceGroupContainer.userData.row = row; pieceGroupContainer.userData.col = col; pieceGroup.add(pieceGroupContainer); return pieceGroupContainer; }
@@ -90,40 +86,22 @@ function animate() { /* ... (same as before) ... */ requestAnimationFrame(animat
 function onWindowResize() { /* ... (same as before) ... */ camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
 
 // --- Raycasting ---
-// *** FIX: Define raycaster and mouse globally ***
 const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2(); // Re-add the missing definition
+const mouse = new THREE.Vector2(); // Defined globally
 
-/** Raycasting - Finds intersected objects. (Removed extra logging) */
-function getIntersects(event) {
-    // Calculate normalized device coordinates (-1 to +1)
-    // Uses the globally defined 'mouse' variable now
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-    // Update the picking ray with the camera and mouse position
+/** Raycasting - Finds intersected objects. */
+function getIntersects(event) { /* ... (same as before, logs removed) ... */
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1; mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
-
-    // Define objects to check for intersections
     const objectsToIntersect = [...pieceGroup.children, ...boardGroup.children, ...highlightGroup.children];
-
-    // Perform the raycast (recursive is true)
     const intersects = raycaster.intersectObjects(objectsToIntersect, true);
-
-    // Filter intersects to get the relevant object (piece group, square, or highlight)
     const relevantIntersects = [];
     for (const intersect of intersects) {
-        let obj = intersect.object; // Mesh hit
-        // Traverse up to find the object with userData.type (the Group)
-        while (obj && (!obj.userData || !obj.userData.type) && obj.parent !== scene) {
-            obj = obj.parent;
-        }
-        // Add if relevant object found and not already added
-        if (obj && obj.userData.type && !relevantIntersects.some(ri => ri.object === obj)) {
-             relevantIntersects.push({ ...intersect, object: obj });
-        }
+        let obj = intersect.object;
+        while (obj && (!obj.userData || !obj.userData.type) && obj.parent !== scene) { obj = obj.parent; }
+        if (obj && obj.userData.type && !relevantIntersects.some(ri => ri.object === obj)) { relevantIntersects.push({ ...intersect, object: obj }); }
     }
-    relevantIntersects.sort((a, b) => a.distance - b.distance); // Closest first
+    relevantIntersects.sort((a, b) => a.distance - b.distance);
     return relevantIntersects;
 }
 
@@ -132,5 +110,6 @@ function getIntersects(event) {
 export {
     init, addPieceToScene, clearPieces, getPositionFromCoords, getCoordsFromPosition,
     getIntersects, showHighlights, clearHighlights, movePieceMesh, removePieceMesh,
-    getPieceMeshAt, BOARD_SIZE, SQUARE_SIZE, scene, camera, modelsLoaded
+    getPieceMeshAt, BOARD_SIZE, SQUARE_SIZE, scene, camera, modelsLoaded,
+    pieceGroup // *** NEW: Export pieceGroup ***
 };
