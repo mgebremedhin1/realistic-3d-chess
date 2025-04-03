@@ -66,7 +66,7 @@ function init(container, onReadyCallback) { /* ... (same as before) ... */
 function createBoard() { /* ... (same as before) ... */
     const boardBaseGeometry = new THREE.BoxGeometry(BOARD_SIZE * SQUARE_SIZE, BOARD_THICKNESS, BOARD_SIZE * SQUARE_SIZE); const boardBaseMaterial = new THREE.MeshStandardMaterial({ color: 0x5c3e31, roughness: 0.8 }); const boardBaseMesh = new THREE.Mesh(boardBaseGeometry, boardBaseMaterial); boardBaseMesh.position.y = -BOARD_THICKNESS / 2; boardBaseMesh.receiveShadow = true; boardGroup.add(boardBaseMesh); const squareGeometry = new THREE.PlaneGeometry(SQUARE_SIZE, SQUARE_SIZE); for (let row = 0; row < BOARD_SIZE; row++) { for (let col = 0; col < BOARD_SIZE; col++) { const isLightSquare = (row + col) % 2 === 0; const squareMaterial = isLightSquare ? lightSquareMaterial : darkSquareMaterial; const squareMesh = new THREE.Mesh(squareGeometry, squareMaterial); squareMesh.position.x = (col - BOARD_SIZE / 2 + 0.5) * SQUARE_SIZE; squareMesh.position.z = (row - BOARD_SIZE / 2 + 0.5) * SQUARE_SIZE; squareMesh.position.y = 0.01; squareMesh.rotation.x = -Math.PI / 2; squareMesh.receiveShadow = true; squareMesh.userData = { type: 'square', row: row, col: col }; boardGroup.add(squareMesh); } } console.log("Chessboard created.");
 }
-function createPlaceholderPiece(type, color) { /* ... (same as before, including rotation fix) ... */
+function createPlaceholderPiece(type, color) { /* ... (same as before, including rotation fix and userData only on group) ... */
     if (!modelsLoaded) { console.error(`Attempted to create piece type '${type}' before models finished loading or failed.`); const fallbackGeo = new THREE.BoxGeometry(SQUARE_SIZE * 0.2, SQUARE_SIZE * 0.2, SQUARE_SIZE * 0.2); const fallbackMesh = new THREE.Mesh(fallbackGeo, color === 'white' ? whitePieceMaterial : blackPieceMaterial); const fallbackGroup = new THREE.Group(); fallbackGroup.add(fallbackMesh); fallbackGroup.userData = { type: 'piece', pieceType: 'fallback', color: color }; return fallbackGroup; }
     const templateMesh = pieceMeshReferences[type.toLowerCase()]; if (!templateMesh) { console.error(`No mesh reference found for piece type '${type}'!`); const fallbackGeo = new THREE.BoxGeometry(SQUARE_SIZE * 0.3, SQUARE_SIZE * 0.7, SQUARE_SIZE * 0.3); const fallbackMesh = new THREE.Mesh(fallbackGeo, color === 'white' ? whitePieceMaterial : blackPieceMaterial); const fallbackGroup = new THREE.Group(); fallbackGroup.add(fallbackMesh); fallbackGroup.userData = { type: 'piece', pieceType: 'fallback_missing', color: color }; return fallbackGroup; }
     const pieceMesh = templateMesh.clone(); pieceMesh.material = color === 'white' ? whitePieceMaterial : blackPieceMaterial; pieceMesh.castShadow = true; pieceMesh.receiveShadow = true;
@@ -89,45 +89,41 @@ function clearHighlights() { /* ... (same as before) ... */ highlightGroup.clear
 function animate() { /* ... (same as before) ... */ requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
 function onWindowResize() { /* ... (same as before) ... */ camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
 
-/** Raycasting - Finds intersected objects. ADDED LOGGING */
+// --- Raycasting ---
+// *** FIX: Define raycaster and mouse globally ***
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2(); // Re-add the missing definition
+
+/** Raycasting - Finds intersected objects. (Removed extra logging) */
 function getIntersects(event) {
+    // Calculate normalized device coordinates (-1 to +1)
+    // Uses the globally defined 'mouse' variable now
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    // Update the picking ray with the camera and mouse position
     raycaster.setFromCamera(mouse, camera);
+
+    // Define objects to check for intersections
     const objectsToIntersect = [...pieceGroup.children, ...boardGroup.children, ...highlightGroup.children];
-    const intersects = raycaster.intersectObjects(objectsToIntersect, true); // recursive: true
 
-    // *** NEW: Log raw intersections ***
-    // console.log("Raw intersects:", intersects);
+    // Perform the raycast (recursive is true)
+    const intersects = raycaster.intersectObjects(objectsToIntersect, true);
 
+    // Filter intersects to get the relevant object (piece group, square, or highlight)
     const relevantIntersects = [];
     for (const intersect of intersects) {
-        let obj = intersect.object; // The actual mesh hit
-        // *** NEW: Log the initially hit object ***
-        // console.log("Ray hit:", obj.name, obj.type, obj.userData);
-
-        // Traverse up to find the object with our 'type' userData (should be the piece GROUP)
-        let depth = 0; // Prevent infinite loops
-        while (obj && (!obj.userData || !obj.userData.type) && obj.parent !== scene && depth < 10) {
-            // console.log("Traversing up from:", obj.name); // Optional verbose log
+        let obj = intersect.object; // Mesh hit
+        // Traverse up to find the object with userData.type (the Group)
+        while (obj && (!obj.userData || !obj.userData.type) && obj.parent !== scene) {
             obj = obj.parent;
-            depth++;
         }
-
-        // *** NEW: Log the final object identified after traversal ***
-        // console.log("Identified object after traversal:", obj ? obj.name : 'null', obj ? obj.type : 'null', obj ? obj.userData : '{}');
-
-        // Only add if we found an object with the type property (piece, square, or highlight)
-        // and haven't added this specific object yet
+        // Add if relevant object found and not already added
         if (obj && obj.userData.type && !relevantIntersects.some(ri => ri.object === obj)) {
-             // *** NEW: Log the object being added as relevant ***
-             console.log(`Adding relevant object: Name='${obj.name}', Type='${obj.userData.type}', pieceType='${obj.userData.pieceType}', Coords=[${obj.userData.row}, ${obj.userData.col}]`);
-             relevantIntersects.push({ ...intersect, object: obj }); // Associate intersection with the group/square/highlight
+             relevantIntersects.push({ ...intersect, object: obj });
         }
     }
     relevantIntersects.sort((a, b) => a.distance - b.distance); // Closest first
-    // *** NEW: Log the final sorted relevant intersects ***
-    // console.log("Final relevant intersects:", relevantIntersects);
     return relevantIntersects;
 }
 
