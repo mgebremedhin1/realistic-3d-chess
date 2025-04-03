@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-// *** NEW: Import the GLTF Loader ***
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // --- Configuration ---
@@ -8,11 +7,9 @@ const BOARD_SIZE = 8;
 const SQUARE_SIZE = 5;
 const BOARD_THICKNESS = 1;
 const HIGHLIGHT_COLOR = 0x61dafb;
-// *** NEW: Path to your model file ***
-const CHESS_SET_MODEL_PATH = 'models/low_poly_chess_set (1).glb'; // Make sure this matches the uploaded path and filename EXACTLY
+const CHESS_SET_MODEL_PATH = 'models/low_poly_chess_set (1).glb'; // Make sure this matches!
 
 // --- Materials ---
-// We might use materials from the GLB model later, but keep these for now
 const lightSquareMaterial = new THREE.MeshStandardMaterial({ color: 0xe3dac9, metalness: 0.2, roughness: 0.3 });
 const darkSquareMaterial = new THREE.MeshStandardMaterial({ color: 0x7b5b3f, metalness: 0.2, roughness: 0.4 });
 const whitePieceMaterial = new THREE.MeshStandardMaterial({ color: 0xf0f0f0, metalness: 0.1, roughness: 0.2 });
@@ -22,11 +19,10 @@ const highlightMaterial = new THREE.MeshStandardMaterial({ color: HIGHLIGHT_COLO
 // --- Scene Variables ---
 let scene, camera, renderer, controls;
 let boardGroup, pieceGroup, highlightGroup;
-// *** NEW: Variable to store the loaded model data ***
 let loadedChessSetModel = null;
-let modelsLoaded = false; // Flag to track loading status
+let modelsLoaded = false;
 
-// --- NEW: Function to Load 3D Models ---
+// --- Function to Load 3D Models ---
 /**
  * Loads the GLB model file asynchronously.
  * @param {function} onLoadedCallback - Function to call once models are loaded.
@@ -36,46 +32,29 @@ function loadModels(onLoadedCallback) {
     console.log(`Attempting to load model from: ${CHESS_SET_MODEL_PATH}`);
 
     loader.load(
-        // resource URL
         CHESS_SET_MODEL_PATH,
-        // called when the resource is loaded
         function (gltf) {
             console.log("GLTF model loaded successfully:", gltf);
             loadedChessSetModel = gltf.scene; // Store the entire loaded scene
 
-            // --- Basic Model Adjustments (Applied to the whole loaded scene) ---
-            // This is often needed as models aren't always exported at the right scale or orientation.
-            // We might need to adjust scale significantly later.
-            // Example: Scale the whole set down if it's too big
-            // loadedChessSetModel.scale.set(0.1, 0.1, 0.1);
-
-            // Enable shadows for all meshes within the loaded model
+            // Enable shadows for all meshes within the loaded model *once*
             loadedChessSetModel.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = true;
                     child.receiveShadow = true;
-                    // Optional: You might need to adjust material properties here if they
-                    // don't look right with your scene's lighting.
-                    // e.g., child.material.metalness = 0.5;
                 }
             });
 
-            modelsLoaded = true; // Set the flag
+            modelsLoaded = true;
             console.log("Models processed and ready.");
             if (onLoadedCallback) {
-                onLoadedCallback(); // Signal that loading is complete
+                onLoadedCallback();
             }
         },
-        // called while loading is progressing (optional)
-        function (xhr) {
-            // console.log((xhr.loaded / xhr.total * 100) + '% loaded');
-        },
-        // called when loading has errors
+        undefined, // Optional progress callback (usually not needed here)
         function (error) {
             console.error('An error happened during GLTF loading:', error);
-            // Handle the error appropriately - maybe display a message to the user
-            // or fall back to placeholder shapes.
-            modelsLoaded = false; // Ensure flag indicates failure
+            modelsLoaded = false;
         }
     );
 }
@@ -88,26 +67,21 @@ function loadModels(onLoadedCallback) {
  * @param {HTMLElement} container - The DOM element to attach the canvas to.
  * @param {function} onReadyCallback - Function to call when scene AND models are ready.
  */
-function init(container, onReadyCallback) { // Added callback parameter
-    // Basic Scene Setup
+function init(container, onReadyCallback) {
+    // Scene, Camera, Renderer, Lights, Controls, Groups setup...
+    // (Same as before - no changes needed in this part of init)
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x282c34);
-
-    // Camera
     const aspect = window.innerWidth / window.innerHeight;
     camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
     camera.position.set(0, SQUARE_SIZE * BOARD_SIZE * 0.6, SQUARE_SIZE * BOARD_SIZE * 0.6);
     camera.lookAt(0, 0, 0);
-
-    // Renderer
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
-
-    // Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
@@ -124,8 +98,6 @@ function init(container, onReadyCallback) { // Added callback parameter
     directionalLight.shadow.camera.bottom = -shadowCamSize;
     directionalLight.shadow.bias = -0.001;
     scene.add(directionalLight);
-
-    // Controls
     controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(0, 0, 0);
     controls.enableDamping = true;
@@ -134,26 +106,18 @@ function init(container, onReadyCallback) { // Added callback parameter
     controls.minDistance = SQUARE_SIZE * 1.5;
     controls.maxDistance = SQUARE_SIZE * BOARD_SIZE * 1.5;
     controls.maxPolarAngle = Math.PI / 2.05;
-
-    // Groups for Organization
     boardGroup = new THREE.Group();
     pieceGroup = new THREE.Group();
     highlightGroup = new THREE.Group();
     scene.add(boardGroup);
     scene.add(pieceGroup);
     scene.add(highlightGroup);
-
-    // Create Board
     createBoard();
-
-    // Handle Window Resize
     window.addEventListener('resize', onWindowResize, false);
-
-    // Start Animation Loop
     animate();
-
     console.log("Three.js scene initialized. Starting model load...");
-    // *** NEW: Load models and call the callback when done ***
+
+    // Load models and call the callback when done
     loadModels(() => {
         console.log("Model loading complete callback received.");
         if (onReadyCallback) {
@@ -163,7 +127,7 @@ function init(container, onReadyCallback) { // Added callback parameter
 }
 
 /**
- * Creates the chessboard geometry (base and squares) and adds it to the scene.
+ * Creates the chessboard geometry.
  * (No changes needed in this function)
  */
 function createBoard() {
@@ -194,82 +158,73 @@ function createBoard() {
 
 
 // ==============================================================
-// == UPDATED PIECE CREATION - USES LOADED MODEL ==
+// == PIECE CREATION - NOW WITH AUTO-SCALING ==
 // ==============================================================
 /**
  * Creates a chess piece by cloning the pre-loaded GLB model scene.
- * TEMPORARY: Uses the whole scene for all pieces. Needs refinement later.
- * @param {string} type - Piece type (currently ignored).
+ * Applies automatic scaling based on desired height.
+ * TEMPORARY: Still uses the whole scene for all pieces.
+ * @param {string} type - Piece type (currently ignored for model selection).
  * @param {string} color - 'white' or 'black'.
  * @returns {THREE.Group | null} A group containing the cloned model, or null if models not loaded.
  */
 function createPlaceholderPiece(type, color) {
-    // Check if the model has finished loading
     if (!modelsLoaded || !loadedChessSetModel) {
         console.error("Attempted to create piece before model loaded!");
-        // Return a very basic fallback or null
         const fallbackGeo = new THREE.BoxGeometry(SQUARE_SIZE * 0.2, SQUARE_SIZE * 0.2, SQUARE_SIZE * 0.2);
         const fallbackMesh = new THREE.Mesh(fallbackGeo, color === 'white' ? whitePieceMaterial : blackPieceMaterial);
         const fallbackGroup = new THREE.Group();
         fallbackGroup.add(fallbackMesh);
         fallbackGroup.userData = { type: 'piece', pieceType: 'fallback', color: color };
-        return fallbackGroup; // Return fallback
-        // return null; // Or return null and handle it in addPieceToScene
+        return fallbackGroup;
     }
 
-    // --- Clone the loaded model scene ---
-    // .clone() creates a deep copy of the model scene
-    const pieceModel = loadedChessSetModel.clone();
-
-    // --- Apply Color / Material ---
-    // We need to apply the correct color. This depends on how the model
-    // was exported. It might have its own materials, or we might need to
-    // override them.
+    const pieceModel = loadedChessSetModel.clone(); // Clone the entire loaded scene for now
     const targetMaterial = color === 'white' ? whitePieceMaterial : blackPieceMaterial;
+
     pieceModel.traverse((child) => {
         if (child.isMesh) {
-            // Option 1: Assign our material (simpler, overrides model's materials)
-            child.material = targetMaterial;
-
-            // Option 2: Modify existing material (if you want to keep model's textures etc.)
-            // if (child.material) {
-            //     child.material.color.set(targetMaterial.color); // Just change color
-            //     // Adjust other properties if needed
-            //     child.material.metalness = targetMaterial.metalness;
-            //     child.material.roughness = targetMaterial.roughness;
-            // }
-
-            // Ensure shadows are enabled on the clone too
+            child.material = targetMaterial; // Apply our simple color material
             child.castShadow = true;
             child.receiveShadow = true;
         }
     });
 
-    // --- Adjust Scale and Position (NEEDS TWEAKING) ---
-    // Models rarely import at the perfect size or position relative to the board square.
-    // You WILL likely need to adjust scale and potentially position.y here.
-    // Find the right scale by trial and error after you see it load the first time.
-    const desiredHeightApprox = SQUARE_SIZE * 1.0; // Target height (adjust as needed)
+    // --- Auto Scaling Logic ---
+    // Define roughly how tall we want the pieces relative to the square size
+    // King might be SQUARE_SIZE * 1.0, Pawn SQUARE_SIZE * 0.6 etc. Let's aim for average height for now.
+    const desiredHeightApprox = SQUARE_SIZE * 0.9; // Target height (Adjust this!)
 
-    // Calculate bounding box to help with scaling (optional but good practice)
-    const box = new THREE.Box3().setFromObject(pieceModel);
+    // Calculate the bounding box of the *original loaded model* to get its current size
+    // We do this calculation once ideally, but for now, we do it per piece.
+    // For more efficiency later, calculate this once after loading the model.
+    const box = new THREE.Box3().setFromObject(pieceModel); // Use the clone before scaling
     const size = box.getSize(new THREE.Vector3());
-    const scaleFactor = desiredHeightApprox / size.y; // Scale based on height
 
-    // Apply scale uniformly or non-uniformly
-    // pieceModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
-    pieceModel.scale.set(3, 3, 3); // START WITH A GUESS - Adjust this value!
+    // Calculate scale factor needed to reach desired height
+    let scaleFactor = 1.0; // Default scale
+    if (size.y > 0.001) { // Avoid division by zero if model has no height
+         scaleFactor = desiredHeightApprox / size.y;
+         console.log(`Calculated scale factor for ${type}: ${scaleFactor} (Original height: ${size.y})`);
+    } else {
+         console.warn(`Model for ${type} has zero height, using default scale.`);
+    }
 
-    // Reposition based on the model's origin (if needed)
-    // If the model's base isn't at y=0, you might need to adjust its y position.
-    // pieceModel.position.y = -box.min.y * scaleFactor; // Try to align base with y=0
+    // Apply the calculated scale uniformly
+    pieceModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+    // --- Auto Positioning Logic (Attempt to place base at y=0) ---
+    // After scaling, the model's origin might not be at its base.
+    // Recalculate bounding box *after scaling* to find the new bottom position (min.y)
+    const scaledBox = new THREE.Box3().setFromObject(pieceModel);
+    // Adjust the piece's internal position so its bottom sits near y=0
+    // Note: pieceModel itself will be placed at y=0 on the board in addPieceToScene,
+    // so this internal adjustment positions it relative to that point.
+    pieceModel.position.y = -scaledBox.min.y; // Shift model up by its lowest point
 
     // --- Add Metadata ---
-    // Store piece type and color for interaction logic
-    // IMPORTANT: Even though we display the whole set now, store the INTENDED type
     pieceModel.userData = { type: 'piece', pieceType: type, color: color };
 
-    // Return the cloned and adjusted model group
     return pieceModel;
 }
 // ==============================================================
@@ -279,56 +234,34 @@ function createPlaceholderPiece(type, color) {
 
 /**
  * Adds a piece to the scene at a specific board coordinate.
- * Now calls the updated createPlaceholderPiece which clones the loaded model.
- * @param {string} type - Piece type (e.g., 'pawn').
- * @param {string} color - 'white' or 'black'.
- * @param {number} row - Board row (0-7).
- * @param {number} col - Board column (0-7).
- * @returns {THREE.Group | null} The created piece group or null if creation failed.
+ * (No changes needed in this function)
  */
 function addPieceToScene(type, color, row, col) {
-    // Calls the NEW createPlaceholderPiece function which uses the loaded model
+    // ... (keep existing addPieceToScene function code) ...
     const pieceMeshGroup = createPlaceholderPiece(type, color);
-
     if (!pieceMeshGroup) {
-        console.error(`Failed to create piece ${type} at [${row}, ${col}] (model likely not loaded yet).`);
-        return null; // Indicate failure
+        console.error(`Failed to create piece ${type} at [${row}, ${col}]`);
+        return null;
     }
-
     const position = getPositionFromCoords(row, col);
-
-    // Position the entire group. The internal adjustments (scale, relative y)
-    // happen inside createPlaceholderPiece. The base should align with y=0 here.
     pieceMeshGroup.position.set(position.x, 0, position.z); // Place base at square center y=0
-
-    // Store board coordinates in the group's userData for later reference
     pieceMeshGroup.userData.row = row;
     pieceMeshGroup.userData.col = col;
-
-    // Add the piece group to the main 'pieceGroup' container
     pieceGroup.add(pieceMeshGroup);
     return pieceMeshGroup;
 }
 
 /**
- * Removes all piece groups from the scene and disposes their geometry/materials.
+ * Removes all piece groups from the scene.
  * (No changes needed in this function)
  */
 function clearPieces() {
     // ... (keep existing clearPieces function code) ...
-    while(pieceGroup.children.length > 0){
+     while(pieceGroup.children.length > 0){
         const piece = pieceGroup.children[0];
         piece.traverse((child) => {
             if (child instanceof THREE.Mesh) {
                 if (child.geometry) child.geometry.dispose();
-                // Only dispose material if it's not shared
-                // if (child.material) {
-                //     if (Array.isArray(child.material)) {
-                //         child.material.forEach(mat => mat.dispose());
-                //     } else {
-                //         child.material.dispose();
-                //     }
-                // }
             }
         });
         pieceGroup.remove(piece);
@@ -341,9 +274,9 @@ function clearPieces() {
  */
 function getPositionFromCoords(row, col) {
     // ... (keep existing getPositionFromCoords function code) ...
-    return new THREE.Vector3(
+     return new THREE.Vector3(
         (col - BOARD_SIZE / 2 + 0.5) * SQUARE_SIZE,
-        0, // Y position on the board plane (base of pieces)
+        0,
         (row - BOARD_SIZE / 2 + 0.5) * SQUARE_SIZE
     );
 }
@@ -369,9 +302,9 @@ function getCoordsFromPosition(position) {
  */
 function getPieceMeshAt(row, col) {
     // ... (keep existing getPieceMeshAt function code) ...
-    for (const piece of pieceGroup.children) {
+     for (const piece of pieceGroup.children) {
         if (piece.userData.row === row && piece.userData.col === col) {
-            return piece; // Return the group
+            return piece;
         }
     }
     return null;
@@ -385,7 +318,7 @@ function getPieceMeshAt(row, col) {
 function movePieceMesh(pieceMeshGroup, newRow, newCol) {
     // ... (keep existing movePieceMesh function code) ...
     const targetPosition = getPositionFromCoords(newRow, newCol);
-    pieceMeshGroup.position.set(targetPosition.x, pieceMeshGroup.position.y, targetPosition.z); // Keep original Y
+    pieceMeshGroup.position.set(targetPosition.x, pieceMeshGroup.position.y, targetPosition.z);
     pieceMeshGroup.userData.row = newRow;
     pieceMeshGroup.userData.col = newCol;
 }
@@ -396,7 +329,7 @@ function movePieceMesh(pieceMeshGroup, newRow, newCol) {
  */
 function removePieceMesh(pieceMeshGroup) {
     // ... (keep existing removePieceMesh function code) ...
-     if (pieceMeshGroup) {
+      if (pieceMeshGroup) {
         pieceMeshGroup.traverse((child) => {
              if (child instanceof THREE.Mesh) {
                  if (child.geometry) child.geometry.dispose();
@@ -482,8 +415,8 @@ function getIntersects(event) {
 
 // --- Export Public Functions and Variables ---
 export {
-    init, // Modified to accept a callback
-    addPieceToScene, // Uses loaded model now
+    init,
+    addPieceToScene,
     clearPieces,
     getPositionFromCoords,
     getCoordsFromPosition,
@@ -497,5 +430,5 @@ export {
     SQUARE_SIZE,
     scene,
     camera,
-    modelsLoaded // *** NEW: Export the loading status flag ***
+    modelsLoaded
 };
