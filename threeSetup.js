@@ -1,60 +1,94 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-// import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'; // Keep commented out
-// import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'; // Keep commented out
+// *** NEW: Import the GLTF Loader ***
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // --- Configuration ---
 const BOARD_SIZE = 8;
-const SQUARE_SIZE = 5; // Size of each square in world units
+const SQUARE_SIZE = 5;
 const BOARD_THICKNESS = 1;
-const HIGHLIGHT_COLOR = 0x61dafb; // Color for valid move highlights
+const HIGHLIGHT_COLOR = 0x61dafb;
+// *** NEW: Path to your model file ***
+const CHESS_SET_MODEL_PATH = 'models/low_poly_chess_set (1).glb'; // Make sure this matches the uploaded path and filename EXACTLY
 
-// --- Materials (Using MeshStandardMaterial for PBR properties) ---
-const lightSquareMaterial = new THREE.MeshStandardMaterial({
-    color: 0xe3dac9, // Light marble/maple
-    metalness: 0.2,
-    roughness: 0.3,
-});
-
-const darkSquareMaterial = new THREE.MeshStandardMaterial({
-    color: 0x7b5b3f, // Dark polished wood
-    metalness: 0.2,
-    roughness: 0.4,
-});
-
-// Materials for the pieces themselves
-const whitePieceMaterial = new THREE.MeshStandardMaterial({
-    color: 0xf0f0f0, // Ivory/Light Polished Material
-    metalness: 0.1,
-    roughness: 0.2,
-});
-
-const blackPieceMaterial = new THREE.MeshStandardMaterial({
-    color: 0x1a1a1a, // Dark Wood/Metallic
-    metalness: 0.3,
-    roughness: 0.4,
-});
-
-// Material for highlighting valid move squares
-const highlightMaterial = new THREE.MeshStandardMaterial({
-    color: HIGHLIGHT_COLOR,
-    transparent: true,
-    opacity: 0.4,
-    roughness: 0.5,
-    side: THREE.DoubleSide
-});
+// --- Materials ---
+// We might use materials from the GLB model later, but keep these for now
+const lightSquareMaterial = new THREE.MeshStandardMaterial({ color: 0xe3dac9, metalness: 0.2, roughness: 0.3 });
+const darkSquareMaterial = new THREE.MeshStandardMaterial({ color: 0x7b5b3f, metalness: 0.2, roughness: 0.4 });
+const whitePieceMaterial = new THREE.MeshStandardMaterial({ color: 0xf0f0f0, metalness: 0.1, roughness: 0.2 });
+const blackPieceMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, metalness: 0.3, roughness: 0.4 });
+const highlightMaterial = new THREE.MeshStandardMaterial({ color: HIGHLIGHT_COLOR, transparent: true, opacity: 0.4, roughness: 0.5, side: THREE.DoubleSide });
 
 // --- Scene Variables ---
 let scene, camera, renderer, controls;
-let boardGroup, pieceGroup, highlightGroup; // Groups to hold objects
+let boardGroup, pieceGroup, highlightGroup;
+// *** NEW: Variable to store the loaded model data ***
+let loadedChessSetModel = null;
+let modelsLoaded = false; // Flag to track loading status
+
+// --- NEW: Function to Load 3D Models ---
+/**
+ * Loads the GLB model file asynchronously.
+ * @param {function} onLoadedCallback - Function to call once models are loaded.
+ */
+function loadModels(onLoadedCallback) {
+    const loader = new GLTFLoader();
+    console.log(`Attempting to load model from: ${CHESS_SET_MODEL_PATH}`);
+
+    loader.load(
+        // resource URL
+        CHESS_SET_MODEL_PATH,
+        // called when the resource is loaded
+        function (gltf) {
+            console.log("GLTF model loaded successfully:", gltf);
+            loadedChessSetModel = gltf.scene; // Store the entire loaded scene
+
+            // --- Basic Model Adjustments (Applied to the whole loaded scene) ---
+            // This is often needed as models aren't always exported at the right scale or orientation.
+            // We might need to adjust scale significantly later.
+            // Example: Scale the whole set down if it's too big
+            // loadedChessSetModel.scale.set(0.1, 0.1, 0.1);
+
+            // Enable shadows for all meshes within the loaded model
+            loadedChessSetModel.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    // Optional: You might need to adjust material properties here if they
+                    // don't look right with your scene's lighting.
+                    // e.g., child.material.metalness = 0.5;
+                }
+            });
+
+            modelsLoaded = true; // Set the flag
+            console.log("Models processed and ready.");
+            if (onLoadedCallback) {
+                onLoadedCallback(); // Signal that loading is complete
+            }
+        },
+        // called while loading is progressing (optional)
+        function (xhr) {
+            // console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+        },
+        // called when loading has errors
+        function (error) {
+            console.error('An error happened during GLTF loading:', error);
+            // Handle the error appropriately - maybe display a message to the user
+            // or fall back to placeholder shapes.
+            modelsLoaded = false; // Ensure flag indicates failure
+        }
+    );
+}
+
 
 // --- Public Functions ---
 
 /**
  * Initializes the entire Three.js scene.
  * @param {HTMLElement} container - The DOM element to attach the canvas to.
+ * @param {function} onReadyCallback - Function to call when scene AND models are ready.
  */
-function init(container) {
+function init(container, onReadyCallback) { // Added callback parameter
     // Basic Scene Setup
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x282c34);
@@ -74,9 +108,9 @@ function init(container) {
     container.appendChild(renderer.domElement);
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); // Slightly brighter ambient
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2); // Slightly softer directional
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
     directionalLight.position.set(15, 30, 20);
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.width = 2048;
@@ -97,9 +131,9 @@ function init(container) {
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.screenSpacePanning = false;
-    controls.minDistance = SQUARE_SIZE * 1.5; // Allow closer zoom
+    controls.minDistance = SQUARE_SIZE * 1.5;
     controls.maxDistance = SQUARE_SIZE * BOARD_SIZE * 1.5;
-    controls.maxPolarAngle = Math.PI / 2.05; // Adjust angle slightly
+    controls.maxPolarAngle = Math.PI / 2.05;
 
     // Groups for Organization
     boardGroup = new THREE.Group();
@@ -118,22 +152,28 @@ function init(container) {
     // Start Animation Loop
     animate();
 
-    console.log("Three.js scene initialized.");
+    console.log("Three.js scene initialized. Starting model load...");
+    // *** NEW: Load models and call the callback when done ***
+    loadModels(() => {
+        console.log("Model loading complete callback received.");
+        if (onReadyCallback) {
+            onReadyCallback(); // Signal that everything is ready
+        }
+    });
 }
 
 /**
  * Creates the chessboard geometry (base and squares) and adds it to the scene.
+ * (No changes needed in this function)
  */
 function createBoard() {
-    // Board base
+    // ... (keep existing createBoard function code) ...
     const boardBaseGeometry = new THREE.BoxGeometry(BOARD_SIZE * SQUARE_SIZE, BOARD_THICKNESS, BOARD_SIZE * SQUARE_SIZE);
     const boardBaseMaterial = new THREE.MeshStandardMaterial({ color: 0x5c3e31, roughness: 0.8 });
     const boardBaseMesh = new THREE.Mesh(boardBaseGeometry, boardBaseMaterial);
     boardBaseMesh.position.y = -BOARD_THICKNESS / 2;
     boardBaseMesh.receiveShadow = true;
     boardGroup.add(boardBaseMesh);
-
-    // Individual squares
     const squareGeometry = new THREE.PlaneGeometry(SQUARE_SIZE, SQUARE_SIZE);
     for (let row = 0; row < BOARD_SIZE; row++) {
         for (let col = 0; col < BOARD_SIZE; col++) {
@@ -154,285 +194,112 @@ function createBoard() {
 
 
 // ==============================================================
-// == MORE DETAILED CODED PIECE FUNCTION (Replaces previous one) ==
+// == UPDATED PIECE CREATION - USES LOADED MODEL ==
 // ==============================================================
 /**
- * Creates more detailed placeholder geometry for a chess piece using basic shapes.
- * Uses THREE.Group to combine multiple meshes for each piece.
- * @param {string} type - Piece type ('pawn', 'rook', 'knight', 'bishop', 'queen', 'king').
+ * Creates a chess piece by cloning the pre-loaded GLB model scene.
+ * TEMPORARY: Uses the whole scene for all pieces. Needs refinement later.
+ * @param {string} type - Piece type (currently ignored).
  * @param {string} color - 'white' or 'black'.
- * @returns {THREE.Group} A group containing the piece mesh(es).
+ * @returns {THREE.Group | null} A group containing the cloned model, or null if models not loaded.
  */
 function createPlaceholderPiece(type, color) {
-    const material = color === 'white' ? whitePieceMaterial : blackPieceMaterial;
-    const pieceGroupContainer = new THREE.Group();
-
-    // --- Base Dimensions ---
-    const squareSizeRef = SQUARE_SIZE;
-    const baseRadius = squareSizeRef * 0.35;
-    const baseHeight = squareSizeRef * 0.1; // Thinner base
-    let currentY = 0; // Track current height for stacking shapes
-
-    // --- Common Base ---
-    const baseGeo = new THREE.CylinderGeometry(baseRadius * 1.1, baseRadius, baseHeight, 32); // Slightly flared base
-    const baseMesh = new THREE.Mesh(baseGeo, material);
-    baseMesh.position.y = currentY + baseHeight / 2;
-    pieceGroupContainer.add(baseMesh);
-    currentY += baseHeight;
-
-    // --- Common Lower Stem ---
-    const stemHeight = squareSizeRef * 0.15;
-    const stemRadius = baseRadius * 0.6;
-    const stemGeo = new THREE.CylinderGeometry(stemRadius, stemRadius, stemHeight, 16);
-    const stemMesh = new THREE.Mesh(stemGeo, material);
-    stemMesh.position.y = currentY + stemHeight / 2;
-    pieceGroupContainer.add(stemMesh);
-    currentY += stemHeight;
-
-    // --- Piece Specific Shapes ---
-    switch (type.toLowerCase()) {
-        case 'pawn':
-            // Collar below the head
-            const pawnCollarHeight = squareSizeRef * 0.08;
-            const pawnCollarRadius = stemRadius * 1.5;
-            const pawnCollarGeo = new THREE.CylinderGeometry(pawnCollarRadius, stemRadius, pawnCollarHeight, 16);
-            const pawnCollarMesh = new THREE.Mesh(pawnCollarGeo, material);
-            pawnCollarMesh.position.y = currentY + pawnCollarHeight / 2;
-            pieceGroupContainer.add(pawnCollarMesh);
-            currentY += pawnCollarHeight;
-            // Head
-            const pawnHeadRadius = baseRadius * 0.7;
-            const pawnHeadGeo = new THREE.SphereGeometry(pawnHeadRadius, 24, 16);
-            const pawnHeadMesh = new THREE.Mesh(pawnHeadGeo, material);
-            pawnHeadMesh.position.y = currentY + pawnHeadRadius * 0.8; // Position head slightly higher
-            pieceGroupContainer.add(pawnHeadMesh);
-            break;
-
-        case 'rook':
-            // Main Tower Body
-            const rookBodyHeight = squareSizeRef * 0.7;
-            const rookBodyRadius = baseRadius * 0.85;
-            const rookBodyGeo = new THREE.CylinderGeometry(rookBodyRadius, rookBodyRadius, rookBodyHeight, 16);
-            const rookBodyMesh = new THREE.Mesh(rookBodyGeo, material);
-            rookBodyMesh.position.y = currentY + rookBodyHeight / 2;
-            pieceGroupContainer.add(rookBodyMesh);
-            currentY += rookBodyHeight;
-            // Top Platform Lip
-            const rookLipHeight = squareSizeRef * 0.08;
-            const rookLipRadius = rookBodyRadius * 1.15;
-            const rookLipGeo = new THREE.CylinderGeometry(rookLipRadius, rookLipRadius, rookLipHeight, 16);
-            const rookLipMesh = new THREE.Mesh(rookLipGeo, material);
-            rookLipMesh.position.y = currentY + rookLipHeight / 2;
-            pieceGroupContainer.add(rookLipMesh);
-            currentY += rookLipHeight;
-            // Crenellations (simplified)
-            const crenellationHeight = squareSizeRef * 0.2;
-            const crenellationWidth = rookLipRadius * 0.5;
-            const crenellationDepth = rookLipRadius * 0.5;
-            const crenellationGeo = new THREE.BoxGeometry(crenellationWidth, crenellationHeight, crenellationDepth);
-            for (let i = 0; i < 4; i++) {
-                const angle = (i / 4) * Math.PI * 2;
-                const crenMesh = new THREE.Mesh(crenellationGeo, material);
-                const radius = rookLipRadius * 0.85; // Position inside the lip radius
-                crenMesh.position.set(
-                    Math.cos(angle) * radius,
-                    currentY + crenellationHeight / 2,
-                    Math.sin(angle) * radius
-                );
-                crenMesh.lookAt(0, crenMesh.position.y, 0); // Point towards center (optional)
-                pieceGroupContainer.add(crenMesh);
-            }
-            break;
-
-        case 'knight':
-            // More abstract Knight using stacked/rotated shapes
-            // Body
-            const knightBodyHeight = squareSizeRef * 0.5;
-            const knightBodyRadius = baseRadius * 0.8;
-            const knightBodyGeo = new THREE.CylinderGeometry(knightBodyRadius * 0.8, knightBodyRadius, knightBodyHeight, 16);
-            const knightBodyMesh = new THREE.Mesh(knightBodyGeo, material);
-            knightBodyMesh.position.y = currentY + knightBodyHeight / 2;
-            pieceGroupContainer.add(knightBodyMesh);
-            currentY += knightBodyHeight;
-            // Neck (angled cylinder)
-            const neckHeight = squareSizeRef * 0.4;
-            const neckRadius = knightBodyRadius * 0.7;
-            const neckGeo = new THREE.CylinderGeometry(neckRadius, neckRadius * 0.8, neckHeight, 16);
-            const neckMesh = new THREE.Mesh(neckGeo, material);
-            neckMesh.position.y = currentY + neckHeight * 0.4;
-            neckMesh.position.x = neckRadius * 0.3; // Offset forward slightly
-            neckMesh.rotation.z = -Math.PI / 6; // Angle forward
-            pieceGroupContainer.add(neckMesh);
-            currentY += neckHeight * 0.6; // Adjust Y based on angled position
-            // Head (Box)
-            const knightHeadWidth = neckRadius * 2.5;
-            const knightHeadHeight = neckHeight * 1.2;
-            const knightHeadDepth = neckRadius * 1.5;
-            const knightHeadGeo = new THREE.BoxGeometry(knightHeadWidth, knightHeadHeight, knightHeadDepth);
-            const knightHeadMesh = new THREE.Mesh(knightHeadGeo, material);
-            // Position relative to the top of the neck
-            knightHeadMesh.position.y = currentY + knightHeadHeight * 0.4;
-            knightHeadMesh.position.x = neckRadius * 1.2; // Further forward
-            knightHeadMesh.rotation.z = -Math.PI / 8; // Slightly less angle than neck
-            pieceGroupContainer.add(knightHeadMesh);
-            // Mane/Ears (Small boxes) - very simplified
-            const earGeo = new THREE.BoxGeometry(knightHeadWidth*0.2, knightHeadHeight*0.4, knightHeadDepth*0.3);
-            const earMeshL = new THREE.Mesh(earGeo, material);
-            const earMeshR = new THREE.Mesh(earGeo, material);
-            earMeshL.position.set(knightHeadMesh.position.x - knightHeadWidth*0.3, knightHeadMesh.position.y + knightHeadHeight*0.4, knightHeadDepth*0.3);
-            earMeshR.position.set(knightHeadMesh.position.x - knightHeadWidth*0.3, knightHeadMesh.position.y + knightHeadHeight*0.4, -knightHeadDepth*0.3);
-            earMeshL.rotation.z = -Math.PI / 10;
-            earMeshR.rotation.z = -Math.PI / 10;
-            pieceGroupContainer.add(earMeshL);
-            pieceGroupContainer.add(earMeshR);
-            break;
-
-        case 'bishop':
-            // Taller body (Cone)
-            const bishopBodyHeight = squareSizeRef * 0.9;
-            const bishopBodyRadius = baseRadius * 0.7;
-            const bishopBodyGeo = new THREE.ConeGeometry(bishopBodyRadius, bishopBodyHeight, 24);
-            const bishopBodyMesh = new THREE.Mesh(bishopBodyGeo, material);
-            bishopBodyMesh.position.y = currentY + bishopBodyHeight / 2;
-            pieceGroupContainer.add(bishopBodyMesh);
-            currentY += bishopBodyHeight;
-            // Collar
-            const bishopCollarHeight = squareSizeRef * 0.08;
-            const bishopCollarRadius = bishopBodyRadius * 0.5; // Smaller collar radius
-            const bishopCollarGeo = new THREE.CylinderGeometry(bishopCollarRadius, bishopBodyRadius, bishopCollarHeight, 16); // Tapered collar
-            const bishopCollarMesh = new THREE.Mesh(bishopCollarGeo, material);
-            bishopCollarMesh.position.y = currentY + bishopCollarHeight / 2;
-            pieceGroupContainer.add(bishopCollarMesh);
-            currentY += bishopCollarHeight;
-            // Head (Sphere)
-            const bishopHeadRadius = bishopBodyRadius * 0.9;
-            const bishopHeadGeo = new THREE.SphereGeometry(bishopHeadRadius, 16, 12);
-            const bishopHeadMesh = new THREE.Mesh(bishopHeadGeo, material);
-            bishopHeadMesh.position.y = currentY + bishopHeadRadius * 0.6; // Position sphere slightly higher
-            pieceGroupContainer.add(bishopHeadMesh);
-            // Tiny Mitre Top (optional simple sphere)
-            const mitreRadius = bishopHeadRadius * 0.3;
-            const mitreGeo = new THREE.SphereGeometry(mitreRadius, 8, 6);
-            const mitreMesh = new THREE.Mesh(mitreGeo, material);
-            mitreMesh.position.y = currentY + bishopHeadRadius + mitreRadius; // On top of head
-            pieceGroupContainer.add(mitreMesh);
-            break;
-
-        case 'queen':
-            // Tapered Body
-            const queenBodyHeight = squareSizeRef * 1.1;
-            const queenBodyRadius = baseRadius * 0.9;
-            const queenBodyGeo = new THREE.CylinderGeometry(stemRadius, queenBodyRadius, queenBodyHeight, 24); // Taper from stem
-            const queenBodyMesh = new THREE.Mesh(queenBodyGeo, material);
-            queenBodyMesh.position.y = currentY + queenBodyHeight / 2;
-            pieceGroupContainer.add(queenBodyMesh);
-            currentY += queenBodyHeight;
-            // Crown Base (like a Torus or wide cylinder)
-            const crownBaseHeight = squareSizeRef * 0.1;
-            const crownBaseRadius = queenBodyRadius * 1.1;
-            const crownBaseGeo = new THREE.CylinderGeometry(crownBaseRadius, crownBaseRadius * 0.9, crownBaseHeight, 16);
-            const crownBaseMesh = new THREE.Mesh(crownBaseGeo, material);
-            crownBaseMesh.position.y = currentY + crownBaseHeight / 2;
-            pieceGroupContainer.add(crownBaseMesh);
-            currentY += crownBaseHeight;
-            // Crown Points (small cones)
-            const pointHeight = squareSizeRef * 0.25;
-            const pointRadius = crownBaseRadius * 0.15;
-            const pointGeo = new THREE.ConeGeometry(pointRadius, pointHeight, 8);
-            const numPoints = 6;
-            for (let i = 0; i < numPoints; i++) {
-                const angle = (i / numPoints) * Math.PI * 2;
-                const pointMesh = new THREE.Mesh(pointGeo, material);
-                const radius = crownBaseRadius * 0.8;
-                pointMesh.position.set(
-                    Math.cos(angle) * radius,
-                    currentY + pointHeight / 2,
-                    Math.sin(angle) * radius
-                );
-                pieceGroupContainer.add(pointMesh);
-            }
-            // Center Jewel
-            const centerJewelRadius = pointRadius * 1.5;
-            const centerJewelGeo = new THREE.SphereGeometry(centerJewelRadius, 8, 6);
-            const centerJewelMesh = new THREE.Mesh(centerJewelGeo, material);
-            centerJewelMesh.position.y = currentY + centerJewelRadius; // Center jewel slightly above points base
-            pieceGroupContainer.add(centerJewelMesh);
-            break;
-
-        case 'king':
-            // Taller Body
-            const kingBodyHeight = squareSizeRef * 1.3; // Tallest
-            const kingBodyRadius = baseRadius * 0.9;
-            const kingBodyGeo = new THREE.CylinderGeometry(stemRadius, kingBodyRadius, kingBodyHeight, 24); // Taper from stem
-            const kingBodyMesh = new THREE.Mesh(kingBodyGeo, material);
-            kingBodyMesh.position.y = currentY + kingBodyHeight / 2;
-            pieceGroupContainer.add(kingBodyMesh);
-            currentY += kingBodyHeight;
-            // Top Platform
-            const kingPlatformHeight = squareSizeRef * 0.1;
-            const kingPlatformRadius = kingBodyRadius * 1.1;
-            const kingPlatformGeo = new THREE.CylinderGeometry(kingPlatformRadius, kingPlatformRadius, kingPlatformHeight, 16);
-            const kingPlatformMesh = new THREE.Mesh(kingPlatformGeo, material);
-            kingPlatformMesh.position.y = currentY + kingPlatformHeight / 2;
-            pieceGroupContainer.add(kingPlatformMesh);
-            currentY += kingPlatformHeight;
-            // Cross Topper (more defined)
-            const crossBarHeight = squareSizeRef * 0.35;
-            const crossBarWidth = kingPlatformRadius * 0.8;
-            const crossBarThickness = crossBarWidth * 0.25;
-            const crossVertGeo = new THREE.BoxGeometry(crossBarThickness, crossBarHeight, crossBarThickness);
-            const crossHorzGeo = new THREE.BoxGeometry(crossBarWidth, crossBarThickness, crossBarThickness);
-            const crossVertMesh = new THREE.Mesh(crossVertGeo, material);
-            const crossHorzMesh = new THREE.Mesh(crossHorzGeo, material);
-            const crossYPos = currentY + crossBarHeight / 2; // Position cross above platform
-            crossVertMesh.position.y = crossYPos;
-            crossHorzMesh.position.y = crossYPos + crossBarHeight * 0.1; // Position horizontal slightly higher on vertical
-            pieceGroupContainer.add(crossVertMesh);
-            pieceGroupContainer.add(crossHorzMesh);
-            break;
-
-        default:
-            console.warn("Unknown piece type in createPlaceholderPiece:", type);
-            const fallbackGeo = new THREE.BoxGeometry(baseRadius * 1.5, squareSizeRef, baseRadius * 1.5);
-            const fallbackMesh = new THREE.Mesh(fallbackGeo, material);
-            fallbackMesh.position.y = baseHeight + squareSizeRef / 2;
-            pieceGroupContainer.add(fallbackMesh);
+    // Check if the model has finished loading
+    if (!modelsLoaded || !loadedChessSetModel) {
+        console.error("Attempted to create piece before model loaded!");
+        // Return a very basic fallback or null
+        const fallbackGeo = new THREE.BoxGeometry(SQUARE_SIZE * 0.2, SQUARE_SIZE * 0.2, SQUARE_SIZE * 0.2);
+        const fallbackMesh = new THREE.Mesh(fallbackGeo, color === 'white' ? whitePieceMaterial : blackPieceMaterial);
+        const fallbackGroup = new THREE.Group();
+        fallbackGroup.add(fallbackMesh);
+        fallbackGroup.userData = { type: 'piece', pieceType: 'fallback', color: color };
+        return fallbackGroup; // Return fallback
+        // return null; // Or return null and handle it in addPieceToScene
     }
 
-    // Apply shadow casting/receiving to all meshes within the group
-    pieceGroupContainer.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
+    // --- Clone the loaded model scene ---
+    // .clone() creates a deep copy of the model scene
+    const pieceModel = loadedChessSetModel.clone();
+
+    // --- Apply Color / Material ---
+    // We need to apply the correct color. This depends on how the model
+    // was exported. It might have its own materials, or we might need to
+    // override them.
+    const targetMaterial = color === 'white' ? whitePieceMaterial : blackPieceMaterial;
+    pieceModel.traverse((child) => {
+        if (child.isMesh) {
+            // Option 1: Assign our material (simpler, overrides model's materials)
+            child.material = targetMaterial;
+
+            // Option 2: Modify existing material (if you want to keep model's textures etc.)
+            // if (child.material) {
+            //     child.material.color.set(targetMaterial.color); // Just change color
+            //     // Adjust other properties if needed
+            //     child.material.metalness = targetMaterial.metalness;
+            //     child.material.roughness = targetMaterial.roughness;
+            // }
+
+            // Ensure shadows are enabled on the clone too
             child.castShadow = true;
-            child.receiveShadow = true; // Allow pieces to receive subtle shadows
+            child.receiveShadow = true;
         }
     });
 
-    // Add metadata to the group itself for raycasting identification
-    pieceGroupContainer.userData = { type: 'piece', pieceType: type, color: color };
+    // --- Adjust Scale and Position (NEEDS TWEAKING) ---
+    // Models rarely import at the perfect size or position relative to the board square.
+    // You WILL likely need to adjust scale and potentially position.y here.
+    // Find the right scale by trial and error after you see it load the first time.
+    const desiredHeightApprox = SQUARE_SIZE * 1.0; // Target height (adjust as needed)
 
-    return pieceGroupContainer; // Return the entire group
+    // Calculate bounding box to help with scaling (optional but good practice)
+    const box = new THREE.Box3().setFromObject(pieceModel);
+    const size = box.getSize(new THREE.Vector3());
+    const scaleFactor = desiredHeightApprox / size.y; // Scale based on height
+
+    // Apply scale uniformly or non-uniformly
+    // pieceModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
+    pieceModel.scale.set(3, 3, 3); // START WITH A GUESS - Adjust this value!
+
+    // Reposition based on the model's origin (if needed)
+    // If the model's base isn't at y=0, you might need to adjust its y position.
+    // pieceModel.position.y = -box.min.y * scaleFactor; // Try to align base with y=0
+
+    // --- Add Metadata ---
+    // Store piece type and color for interaction logic
+    // IMPORTANT: Even though we display the whole set now, store the INTENDED type
+    pieceModel.userData = { type: 'piece', pieceType: type, color: color };
+
+    // Return the cloned and adjusted model group
+    return pieceModel;
 }
 // ==============================================================
-// == END OF DETAILED PIECE FUNCTION ==
+// == END OF UPDATED PIECE FUNCTION ==
 // ==============================================================
 
 
 /**
- * Adds a piece (as a Group created by createPlaceholderPiece) to the scene
- * at a specific board coordinate.
+ * Adds a piece to the scene at a specific board coordinate.
+ * Now calls the updated createPlaceholderPiece which clones the loaded model.
  * @param {string} type - Piece type (e.g., 'pawn').
  * @param {string} color - 'white' or 'black'.
  * @param {number} row - Board row (0-7).
  * @param {number} col - Board column (0-7).
- * @returns {THREE.Group} The created piece group.
+ * @returns {THREE.Group | null} The created piece group or null if creation failed.
  */
 function addPieceToScene(type, color, row, col) {
-    // Calls the NEW createPlaceholderPiece function
+    // Calls the NEW createPlaceholderPiece function which uses the loaded model
     const pieceMeshGroup = createPlaceholderPiece(type, color);
+
+    if (!pieceMeshGroup) {
+        console.error(`Failed to create piece ${type} at [${row}, ${col}] (model likely not loaded yet).`);
+        return null; // Indicate failure
+    }
+
     const position = getPositionFromCoords(row, col);
 
-    // Position the entire group so its base rests on the board (y=0).
-    pieceMeshGroup.position.set(position.x, 0 , position.z);
+    // Position the entire group. The internal adjustments (scale, relative y)
+    // happen inside createPlaceholderPiece. The base should align with y=0 here.
+    pieceMeshGroup.position.set(position.x, 0, position.z); // Place base at square center y=0
 
     // Store board coordinates in the group's userData for later reference
     pieceMeshGroup.userData.row = row;
@@ -444,14 +311,24 @@ function addPieceToScene(type, color, row, col) {
 }
 
 /**
- * Removes all piece groups from the scene and disposes their geometry.
+ * Removes all piece groups from the scene and disposes their geometry/materials.
+ * (No changes needed in this function)
  */
 function clearPieces() {
+    // ... (keep existing clearPieces function code) ...
     while(pieceGroup.children.length > 0){
         const piece = pieceGroup.children[0];
         piece.traverse((child) => {
             if (child instanceof THREE.Mesh) {
                 if (child.geometry) child.geometry.dispose();
+                // Only dispose material if it's not shared
+                // if (child.material) {
+                //     if (Array.isArray(child.material)) {
+                //         child.material.forEach(mat => mat.dispose());
+                //     } else {
+                //         child.material.dispose();
+                //     }
+                // }
             }
         });
         pieceGroup.remove(piece);
@@ -459,12 +336,11 @@ function clearPieces() {
 }
 
 /**
- * Converts board coordinates (row, col) to 3D world position (center of the square).
- * @param {number} row - Board row (0-7).
- * @param {number} col - Board column (0-7).
- * @returns {THREE.Vector3} World position.
+ * Converts board coordinates (row, col) to 3D world position.
+ * (No changes needed in this function)
  */
 function getPositionFromCoords(row, col) {
+    // ... (keep existing getPositionFromCoords function code) ...
     return new THREE.Vector3(
         (col - BOARD_SIZE / 2 + 0.5) * SQUARE_SIZE,
         0, // Y position on the board plane (base of pieces)
@@ -474,26 +350,25 @@ function getPositionFromCoords(row, col) {
 
 /**
  * Converts 3D world position to board coordinates (row, col).
- * @param {THREE.Vector3} position - World position.
- * @returns {{row: number, col: number} | null} Board coordinates or null if off board.
+ * (No changes needed in this function)
  */
 function getCoordsFromPosition(position) {
+    // ... (keep existing getCoordsFromPosition function code) ...
     const col = Math.floor(position.x / SQUARE_SIZE + BOARD_SIZE / 2);
     const row = Math.floor(position.z / SQUARE_SIZE + BOARD_SIZE / 2);
     if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE) {
         return { row, col };
     }
-    return null; // Position is outside the board
+    return null;
 }
 
 
 /**
- * Finds the piece group at the given board coordinates by checking userData.
- * @param {number} row
- * @param {number} col
- * @returns {THREE.Group | null} The piece group or null if not found.
+ * Finds the piece group at the given board coordinates.
+ * (No changes needed in this function)
  */
 function getPieceMeshAt(row, col) {
+    // ... (keep existing getPieceMeshAt function code) ...
     for (const piece of pieceGroup.children) {
         if (piece.userData.row === row && piece.userData.col === col) {
             return piece; // Return the group
@@ -505,12 +380,10 @@ function getPieceMeshAt(row, col) {
 
 /**
  * Moves a piece group instantly to new board coordinates.
- * Updates the group's position and its stored userData.
- * @param {THREE.Group} pieceMeshGroup - The piece group to move.
- * @param {number} newRow - The target row.
- * @param {number} newCol - The target column.
+ * (No changes needed in this function)
  */
 function movePieceMesh(pieceMeshGroup, newRow, newCol) {
+    // ... (keep existing movePieceMesh function code) ...
     const targetPosition = getPositionFromCoords(newRow, newCol);
     pieceMeshGroup.position.set(targetPosition.x, pieceMeshGroup.position.y, targetPosition.z); // Keep original Y
     pieceMeshGroup.userData.row = newRow;
@@ -518,11 +391,12 @@ function movePieceMesh(pieceMeshGroup, newRow, newCol) {
 }
 
 /**
- * Removes a specific piece group from the scene and disposes its geometry.
- * @param {THREE.Group} pieceMeshGroup - The piece group to remove.
+ * Removes a specific piece group from the scene.
+ * (No changes needed in this function)
  */
 function removePieceMesh(pieceMeshGroup) {
-    if (pieceMeshGroup) {
+    // ... (keep existing removePieceMesh function code) ...
+     if (pieceMeshGroup) {
         pieceMeshGroup.traverse((child) => {
              if (child instanceof THREE.Mesh) {
                  if (child.geometry) child.geometry.dispose();
@@ -534,13 +408,12 @@ function removePieceMesh(pieceMeshGroup) {
 
 
 // --- Highlighting ---
-
 /**
- * Adds visual highlights (semi-transparent planes) to the specified squares.
- * Clears any existing highlights first.
- * @param {Array<{row: number, col: number}>} squares - Array of coordinates to highlight.
+ * Adds visual highlights to the specified squares.
+ * (No changes needed in this function)
  */
 function showHighlights(squares) {
+    // ... (keep existing showHighlights function code) ...
     clearHighlights();
     const highlightGeometry = new THREE.PlaneGeometry(SQUARE_SIZE * 0.9, SQUARE_SIZE * 0.9);
     squares.forEach(sq => {
@@ -555,8 +428,10 @@ function showHighlights(squares) {
 
 /**
  * Removes all highlight meshes from the scene.
+ * (No changes needed in this function)
  */
 function clearHighlights() {
+    // ... (keep existing clearHighlights function code) ...
     highlightGroup.clear();
 }
 
@@ -575,23 +450,21 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-// --- Raycasting (for clicking objects) ---
+// --- Raycasting ---
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
 /**
- * Performs raycasting from the camera through the mouse position
- * to find intersected objects (pieces, squares, highlights).
- * @param {MouseEvent} event - The mouse event containing clientX/clientY.
- * @returns {THREE.Intersection[]} Array of intersections, filtered for relevant objects, sorted by distance.
+ * Performs raycasting to find intersected objects.
+ * (No changes needed in this function)
  */
 function getIntersects(event) {
+    // ... (keep existing getIntersects function code) ...
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
     const objectsToIntersect = [...pieceGroup.children, ...boardGroup.children, ...highlightGroup.children];
     const intersects = raycaster.intersectObjects(objectsToIntersect, true);
-
     const relevantIntersects = [];
     for (const intersect of intersects) {
         let obj = intersect.object;
@@ -609,8 +482,8 @@ function getIntersects(event) {
 
 // --- Export Public Functions and Variables ---
 export {
-    init,
-    addPieceToScene,
+    init, // Modified to accept a callback
+    addPieceToScene, // Uses loaded model now
     clearPieces,
     getPositionFromCoords,
     getCoordsFromPosition,
@@ -623,5 +496,6 @@ export {
     BOARD_SIZE,
     SQUARE_SIZE,
     scene,
-    camera
+    camera,
+    modelsLoaded // *** NEW: Export the loading status flag ***
 };
