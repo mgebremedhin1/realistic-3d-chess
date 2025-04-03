@@ -34,7 +34,7 @@ function loadModels(onLoadedCallback) {
     loader.load(
         CHESS_SET_MODEL_PATH,
         function (gltf) {
-            console.log("GLTF model loaded successfully:", gltf);
+            console.log("GLTF model loaded successfully. Scene object:", gltf.scene);
             loadedChessSetModel = gltf.scene; // Store the entire loaded scene
 
             // Enable shadows for all meshes within the loaded model *once*
@@ -45,13 +45,26 @@ function loadModels(onLoadedCallback) {
                 }
             });
 
+            // *** NEW: Log the names of objects within the loaded scene ***
+            // This helps us identify how to select individual pieces later.
+            console.log("--- Traversing loaded model scene to find object names ---");
+            loadedChessSetModel.traverse((child) => {
+                // Log meshes and groups, as pieces might be either
+                if (child.isMesh || child.isGroup) {
+                    // Log the object's name and the object itself for inspection in the console
+                    console.log(`Found object: Name='${child.name}', Type='${child.type}'`, child);
+                }
+            });
+            console.log("--- Finished traversing scene ---");
+            // *** END OF NEW LOGGING CODE ***
+
             modelsLoaded = true;
             console.log("Models processed and ready.");
             if (onLoadedCallback) {
                 onLoadedCallback();
             }
         },
-        undefined, // Optional progress callback (usually not needed here)
+        undefined, // Optional progress callback
         function (error) {
             console.error('An error happened during GLTF loading:', error);
             modelsLoaded = false;
@@ -158,7 +171,7 @@ function createBoard() {
 
 
 // ==============================================================
-// == PIECE CREATION - NOW WITH AUTO-SCALING ==
+// == PIECE CREATION - Still uses whole scene for now ==
 // ==============================================================
 /**
  * Creates a chess piece by cloning the pre-loaded GLB model scene.
@@ -169,7 +182,10 @@ function createBoard() {
  * @returns {THREE.Group | null} A group containing the cloned model, or null if models not loaded.
  */
 function createPlaceholderPiece(type, color) {
-    if (!modelsLoaded || !loadedChessSetModel) {
+    // (Code is the same as the previous version - three_setup_adjust_scale_full)
+    // (It still clones the whole scene, applies material, scales, and positions)
+    // ... (keep existing createPlaceholderPiece function code from previous step) ...
+     if (!modelsLoaded || !loadedChessSetModel) {
         console.error("Attempted to create piece before model loaded!");
         const fallbackGeo = new THREE.BoxGeometry(SQUARE_SIZE * 0.2, SQUARE_SIZE * 0.2, SQUARE_SIZE * 0.2);
         const fallbackMesh = new THREE.Mesh(fallbackGeo, color === 'white' ? whitePieceMaterial : blackPieceMaterial);
@@ -179,84 +195,59 @@ function createPlaceholderPiece(type, color) {
         return fallbackGroup;
     }
 
-    const pieceModel = loadedChessSetModel.clone(); // Clone the entire loaded scene for now
+    const pieceModel = loadedChessSetModel.clone();
     const targetMaterial = color === 'white' ? whitePieceMaterial : blackPieceMaterial;
 
     pieceModel.traverse((child) => {
         if (child.isMesh) {
-            child.material = targetMaterial; // Apply our simple color material
+            child.material = targetMaterial;
             child.castShadow = true;
             child.receiveShadow = true;
         }
     });
 
-    // --- Auto Scaling Logic ---
-    // Define roughly how tall we want the pieces relative to the square size
-    // King might be SQUARE_SIZE * 1.0, Pawn SQUARE_SIZE * 0.6 etc. Let's aim for average height for now.
-    const desiredHeightApprox = SQUARE_SIZE * 0.9; // Target height (Adjust this!)
-
-    // Calculate the bounding box of the *original loaded model* to get its current size
-    // We do this calculation once ideally, but for now, we do it per piece.
-    // For more efficiency later, calculate this once after loading the model.
-    const box = new THREE.Box3().setFromObject(pieceModel); // Use the clone before scaling
+    const desiredHeightApprox = SQUARE_SIZE * 0.9;
+    const box = new THREE.Box3().setFromObject(pieceModel);
     const size = box.getSize(new THREE.Vector3());
-
-    // Calculate scale factor needed to reach desired height
-    let scaleFactor = 1.0; // Default scale
-    if (size.y > 0.001) { // Avoid division by zero if model has no height
+    let scaleFactor = 1.0;
+    if (size.y > 0.001) {
          scaleFactor = desiredHeightApprox / size.y;
-         console.log(`Calculated scale factor for ${type}: ${scaleFactor} (Original height: ${size.y})`);
+         // console.log(`Calculated scale factor for ${type}: ${scaleFactor} (Original height: ${size.y})`); // Keep console log minimal for now
     } else {
          console.warn(`Model for ${type} has zero height, using default scale.`);
     }
-
-    // Apply the calculated scale uniformly
     pieceModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
 
-    // --- Auto Positioning Logic (Attempt to place base at y=0) ---
-    // After scaling, the model's origin might not be at its base.
-    // Recalculate bounding box *after scaling* to find the new bottom position (min.y)
     const scaledBox = new THREE.Box3().setFromObject(pieceModel);
-    // Adjust the piece's internal position so its bottom sits near y=0
-    // Note: pieceModel itself will be placed at y=0 on the board in addPieceToScene,
-    // so this internal adjustment positions it relative to that point.
-    pieceModel.position.y = -scaledBox.min.y; // Shift model up by its lowest point
+    pieceModel.position.y = -scaledBox.min.y;
 
-    // --- Add Metadata ---
     pieceModel.userData = { type: 'piece', pieceType: type, color: color };
 
     return pieceModel;
 }
 // ==============================================================
-// == END OF UPDATED PIECE FUNCTION ==
+// == END OF PIECE FUNCTION ==
 // ==============================================================
 
 
-/**
- * Adds a piece to the scene at a specific board coordinate.
- * (No changes needed in this function)
- */
+// --- Other Functions (addPieceToScene, clearPieces, etc.) ---
+// (Keep all remaining functions the same as the previous version - three_setup_adjust_scale_full)
+// ... (addPieceToScene function) ...
 function addPieceToScene(type, color, row, col) {
-    // ... (keep existing addPieceToScene function code) ...
     const pieceMeshGroup = createPlaceholderPiece(type, color);
     if (!pieceMeshGroup) {
         console.error(`Failed to create piece ${type} at [${row}, ${col}]`);
         return null;
     }
     const position = getPositionFromCoords(row, col);
-    pieceMeshGroup.position.set(position.x, 0, position.z); // Place base at square center y=0
+    pieceMeshGroup.position.set(position.x, 0, position.z);
     pieceMeshGroup.userData.row = row;
     pieceMeshGroup.userData.col = col;
     pieceGroup.add(pieceMeshGroup);
     return pieceMeshGroup;
 }
-
-/**
- * Removes all piece groups from the scene.
- * (No changes needed in this function)
- */
+// ... (clearPieces function) ...
 function clearPieces() {
-    // ... (keep existing clearPieces function code) ...
      while(pieceGroup.children.length > 0){
         const piece = pieceGroup.children[0];
         piece.traverse((child) => {
@@ -267,26 +258,16 @@ function clearPieces() {
         pieceGroup.remove(piece);
     }
 }
-
-/**
- * Converts board coordinates (row, col) to 3D world position.
- * (No changes needed in this function)
- */
+// ... (getPositionFromCoords function) ...
 function getPositionFromCoords(row, col) {
-    // ... (keep existing getPositionFromCoords function code) ...
      return new THREE.Vector3(
         (col - BOARD_SIZE / 2 + 0.5) * SQUARE_SIZE,
         0,
         (row - BOARD_SIZE / 2 + 0.5) * SQUARE_SIZE
     );
 }
-
-/**
- * Converts 3D world position to board coordinates (row, col).
- * (No changes needed in this function)
- */
+// ... (getCoordsFromPosition function) ...
 function getCoordsFromPosition(position) {
-    // ... (keep existing getCoordsFromPosition function code) ...
     const col = Math.floor(position.x / SQUARE_SIZE + BOARD_SIZE / 2);
     const row = Math.floor(position.z / SQUARE_SIZE + BOARD_SIZE / 2);
     if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE) {
@@ -294,14 +275,8 @@ function getCoordsFromPosition(position) {
     }
     return null;
 }
-
-
-/**
- * Finds the piece group at the given board coordinates.
- * (No changes needed in this function)
- */
+// ... (getPieceMeshAt function) ...
 function getPieceMeshAt(row, col) {
-    // ... (keep existing getPieceMeshAt function code) ...
      for (const piece of pieceGroup.children) {
         if (piece.userData.row === row && piece.userData.col === col) {
             return piece;
@@ -309,26 +284,15 @@ function getPieceMeshAt(row, col) {
     }
     return null;
 }
-
-
-/**
- * Moves a piece group instantly to new board coordinates.
- * (No changes needed in this function)
- */
+// ... (movePieceMesh function) ...
 function movePieceMesh(pieceMeshGroup, newRow, newCol) {
-    // ... (keep existing movePieceMesh function code) ...
     const targetPosition = getPositionFromCoords(newRow, newCol);
     pieceMeshGroup.position.set(targetPosition.x, pieceMeshGroup.position.y, targetPosition.z);
     pieceMeshGroup.userData.row = newRow;
     pieceMeshGroup.userData.col = newCol;
 }
-
-/**
- * Removes a specific piece group from the scene.
- * (No changes needed in this function)
- */
+// ... (removePieceMesh function) ...
 function removePieceMesh(pieceMeshGroup) {
-    // ... (keep existing removePieceMesh function code) ...
       if (pieceMeshGroup) {
         pieceMeshGroup.traverse((child) => {
              if (child instanceof THREE.Mesh) {
@@ -338,15 +302,8 @@ function removePieceMesh(pieceMeshGroup) {
         pieceGroup.remove(pieceMeshGroup);
     }
 }
-
-
-// --- Highlighting ---
-/**
- * Adds visual highlights to the specified squares.
- * (No changes needed in this function)
- */
+// ... (showHighlights function) ...
 function showHighlights(squares) {
-    // ... (keep existing showHighlights function code) ...
     clearHighlights();
     const highlightGeometry = new THREE.PlaneGeometry(SQUARE_SIZE * 0.9, SQUARE_SIZE * 0.9);
     squares.forEach(sq => {
@@ -358,41 +315,24 @@ function showHighlights(squares) {
         highlightGroup.add(highlightMesh);
     });
 }
-
-/**
- * Removes all highlight meshes from the scene.
- * (No changes needed in this function)
- */
+// ... (clearHighlights function) ...
 function clearHighlights() {
-    // ... (keep existing clearHighlights function code) ...
     highlightGroup.clear();
 }
-
-
-// --- Animation Loop ---
+// ... (animate function) ...
 function animate() {
     requestAnimationFrame(animate);
     controls.update();
     renderer.render(scene, camera);
 }
-
-// --- Event Handlers ---
+// ... (onWindowResize function) ...
 function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
-
-// --- Raycasting ---
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
-
-/**
- * Performs raycasting to find intersected objects.
- * (No changes needed in this function)
- */
+// ... (getIntersects function) ...
 function getIntersects(event) {
-    // ... (keep existing getIntersects function code) ...
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
