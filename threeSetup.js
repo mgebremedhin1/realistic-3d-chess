@@ -21,8 +21,34 @@ let scene, camera, renderer, controls;
 let boardGroup, pieceGroup, highlightGroup; // pieceGroup is defined here
 let pieceMeshReferences = { pawn: null, rook: null, knight: null, bishop: null, queen: null, king: null };
 let modelsLoaded = false;
+// Stray ); and } lines were removed from here
+
+// --- Function to Load 3D Models ---
+// NOTE: You didn't include the loadModels function in the broken code snippet,
+// assuming it's the same as the correct version you showed initially.
+// Make sure it exists somewhere in your actual file.
+function loadModels(onLoadedCallback) {
+    const loader = new GLTFLoader(); console.log(`Attempting to load model from: ${CHESS_SET_MODEL_PATH}`);
+    loader.load( CHESS_SET_MODEL_PATH, function (gltf) {
+            console.log("GLTF model loaded successfully."); const loadedScene = gltf.scene;
+            loadedScene.traverse((child) => { if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; } });
+            console.log("--- Finding individual piece meshes by name ---");
+            const nameMap = { pawn: 'Pawn_0', rook: 'Rook_0', knight: 'Knight_0', bishop: 'Bishop_0', queen: 'Queen_0', king: 'King_0' };
+            let allFound = true;
+            for (const type in nameMap) {
+                const meshName = nameMap[type]; const foundMesh = loadedScene.getObjectByName(meshName);
+                if (foundMesh && foundMesh.isMesh) { pieceMeshReferences[type] = foundMesh; console.log(`Stored reference for '${type}' using mesh named '${meshName}'`); }
+                else { console.error(`Could not find mesh named '${meshName}' for piece type '${type}'!`); allFound = false; }
+            }
+            if (allFound) { console.log("--- Successfully stored references for all piece types ---"); modelsLoaded = true; }
+            else { console.error("--- Failed to find all required piece meshes! Check console errors. ---"); modelsLoaded = false; }
+            console.log("Model processing complete."); if (onLoadedCallback) { onLoadedCallback(); }
+        }, undefined, function (error) {
+            console.error('An error happened during GLTF loading:', error); modelsLoaded = false; if (onLoadedCallback) { onLoadedCallback(); }
+        }
     );
 }
+
 
 // --- Public Functions ---
 function init(container, onReadyCallback) { /* ... (same as before) ... */
